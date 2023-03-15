@@ -1,0 +1,13 @@
+_Func Compare a b
+	_If a b >   _Set ret 1;
+	_Elif a b < _Set ret -1;
+	_Else       _Set ret 0;
+	_Return ret;
+
+_Set some1 5
+_Set some2 10
+
+some1 some1 Compare
+some1 some2 Compare
+some2 some1 Compare
+some2 some2 Compare
