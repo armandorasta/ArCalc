@@ -2,7 +2,7 @@
 
 #include "Core.h"
 #include "Util/Keyword.h"
-#include "Util/Function.h"
+#include "Util/FunctionManager.h"
 
 namespace ArCalc {
 	/*
@@ -65,7 +65,7 @@ namespace ArCalc {
 
 	class Parser {
 	private:
-		enum class State : size_t;
+		enum class St : size_t;
 
 	private:
 		struct ConditionAndStatement {
@@ -77,21 +77,39 @@ namespace ArCalc {
 		Parser();
 		Parser(std::vector<ParamData> const& paramData, bool bValidation);
 
-		static std::optional<double> CallFunction(std::string_view funcName, std::vector<double> const& args);
-		static void ParseFile(fs::path filePath);
+		static void ParseFile(fs::path const& filePath);
+		static void ParseFile(fs::path const& filePath, fs::path const& outFilePath);
+		static void ParseIStream(std::istream& is);
+		static void ParseIStream(std::istream& is, std::ostream& resultOStream);
+		
+		std::optional<double> CallFunction(std::string_view funcName, std::vector<double> const& args);
 
 		void ParseLine(std::string_view line);
 		void ListVarNames(std::string_view prefix);
 
+		void SetOutStream(std::ostream& toWhat);
+
+		bool IsVisible(std::string_view varName) const;
+		double Deref(std::string_view varName) const;
+		double GetLast() const;
+
+		bool IsFunction(std::string_view funcName) const;
+		constexpr bool IsParsingFunction() const 
+			{ return m_bInFunction; }
+		
+		constexpr size_t GetLineNumber() const 
+			{ return m_LineNumber; }
+		constexpr bool IsLineEndsWithSemiColon() const 
+			{ return m_bSemiColon; }
+
 	private:
 		void HandleFirstToken();
-		bool IsLineEndsWithSemiColon() const;
 		void SetVar(std::string_view name, double value);
 		double GetVar(std::string_view name) const;
 		double Eval(std::string_view exprString) const;
-		constexpr void IncrementLineNumber(size_t inc = 1U) { m_LineIndex += inc; }
-		constexpr size_t GetLineNumber() const { return m_LineIndex; }
-
+		constexpr void IncrementLineNumber(size_t inc = 1U) 
+			{ m_LineNumber += inc; }
+		
 		void HandleSetKeyword();
 		void HandleNormalExpression();
 		void HandleListKeyword();
@@ -100,24 +118,25 @@ namespace ArCalc {
 		void HandleReturnKeyword();
 		void AddFunctionLine();
 
-		void HandleIfKeyword();
+		void HandleSelectionKeyword();
 		void HandleConditionalBody(bool bExecute);
 		ConditionAndStatement ParseConditionalHeader(std::string_view header);
 
 		void AssertKeyword(std::string_view glyph, KeywordType what);
 		void AssertIdentifier(std::string_view what);
 
-		constexpr void SetState(State newState) { m_CurrState = newState; }
-		constexpr State GetState() const { return m_CurrState; }
-
-		constexpr bool IsParsingFunction() const { return m_bInFunction; }
-
+		constexpr void SetState(St newState) 
+			{ m_CurrState = newState; }
+		constexpr St GetState() const 
+			{ return m_CurrState; }
+		
 	private:
+		FunctionManager m_FunMan{*this};
+
 		std::string_view m_CurrentLine{};
 		std::unordered_map<std::string, double> m_VarMap{};
-		State m_CurrState;
-
-		size_t m_LineIndex{};
+		St m_CurrState;
+		size_t m_LineNumber{};
 
 		bool m_bSemiColon{};
 		bool m_bInFunction{};
@@ -126,6 +145,8 @@ namespace ArCalc {
 		std::optional<bool> m_bConditionRegister{};
 		std::optional<double> m_ReturnValueRegister{};
 
-		std::unique_ptr<Parser> m_pSubParser{};
+		std::unique_ptr<Parser> m_pValidationSubParser{};
+
+		std::ostream* m_pOutStream{&std::cout};
 	};
 }

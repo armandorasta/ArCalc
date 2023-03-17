@@ -2,6 +2,14 @@
 #include "Exception/ArCalcException.h"
 
 namespace ArCalc {
+	enum class MathOperatorType : size_t {
+		Unary   = 0b0001,
+		Binary  = 0b0010,
+		Ternary = 0b0100,
+
+		UnaryOrBinary = Unary | Binary,
+	};
+
 	bool MathOperator::IsInitialized() {
 		return !s_Operators.empty();
 	}
@@ -18,12 +26,12 @@ namespace ArCalc {
 
 	bool MathOperator::IsUnary(std::string_view op) {
 		ARCALC_ASSERT(IsValid(op), "[IsUnary] Invalid operator: {}", op);
-		return s_Operators.at(std::string{op}).Type & OpType::Unary;
+		return s_Operators.at(std::string{op}).Type & OT::Unary;
 	}
 
 	bool MathOperator::IsBinary(std::string_view op) {
 		ARCALC_ASSERT(IsValid(op), "[IsBinary] Invalid operator: {}", op);
-		return s_Operators.at(std::string{op}).Type & OpType::Binary;
+		return s_Operators.at(std::string{op}).Type & OT::Binary;
 	}
 
 	double MathOperator::EvalBinary(std::string_view op, double lhs, double rhs) {
@@ -38,26 +46,26 @@ namespace ArCalc {
 		return s_Operators.at(std::string{op}).Func({operand});
 	}
 
-	void MathOperator::AddOperator(std::string const& glyph, OpType type, 
+	void MathOperator::AddOperator(std::string const& glyph, OT type, 
 		std::function<double(std::vector<double>const&)>&& func) {
 		s_Operators.insert({glyph,{type, std::move(func)}});
 	}
 
 	void MathOperator::AddUnaryOperator(std::string const& glyph, std::function<double(double)>&& func) {
-		AddOperator(glyph, OpType::Unary, [func = std::move(func)](auto const& operands) {
+		AddOperator(glyph, OT::Unary, [func = std::move(func)](auto const& operands) {
 			return func(operands[0]);
 		});
 	}
 
 	void MathOperator::AddBinaryOperator(std::string const& glyph, std::function<double(double, double)>&& func) {
-		AddOperator(glyph, OpType::Binary, [func = std::move(func)](auto const& operands) {
+		AddOperator(glyph, OT::Binary, [func = std::move(func)](auto const& operands) {
 			return func(operands[0], operands[1]);
 		});
 	}
 
 	void MathOperator::AddTernaryOperator(std::string const& glyph, 
 		std::function<double(double, double, double)>&& func) {
-		AddOperator(glyph, OpType::Ternary, [func = std::move(func)](auto const& operands) {
+		AddOperator(glyph, OT::Ternary, [func = std::move(func)](auto const& operands) {
 			return func(operands[0], operands[1], operands[2]);
 		});
 	}
@@ -71,12 +79,13 @@ namespace ArCalc {
 		// Relational
 		AddBinaryOperator("<",  std::less         <>{});
 		AddBinaryOperator("<=", std::less_equal   <>{});
-		AddBinaryOperator("=",  std::equal_to     <>{});
+		AddBinaryOperator("==", std::equal_to     <>{});
+		AddBinaryOperator("!=", std::not_equal_to <>{});
 		AddBinaryOperator(">=", std::greater_equal<>{});
 		AddBinaryOperator(">",  std::greater      <>{});
 		// Logical
-		AddBinaryOperator("&&", std::logical_and  <>{});
-		AddBinaryOperator("||", std::logical_or   <>{});
+		AddBinaryOperator("&&", [](auto l, auto r) { return l && r             ? 1.0 : 0.0; });
+		AddBinaryOperator("||", [](auto l, auto r) { return l || r             ? 1.0 : 0.0; });
 		AddBinaryOperator("^^", [](auto l, auto r) { return l && !r || r && !l ? 1.0 : 0.0; });
 		// Utils
 		AddBinaryOperator("max", [](auto l, auto r) { return std::max(l, r); });
@@ -108,7 +117,7 @@ namespace ArCalc {
 
 	void MathOperator::AddTrigOperators() {
 #define ADD_TRIG_FUNC_BASE(_glyph, _operation) \
-	AddOperator(#_glyph, OpType::Unary, [](auto operands) { \
+	AddOperator(#_glyph, OT::Unary, [](auto operands) { \
 		return _operation; \
 	})
 

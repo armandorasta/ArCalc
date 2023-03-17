@@ -2,16 +2,22 @@
 
 #include "IEvaluator.h"
 #include "ValueStack.h"
+#include "Util/FunctionManager.h"
 
 namespace ArCalc {
 	class PostfixMathEvaluator : public IEvaluator {
+	public:
+		using VarMap = std::unordered_map<std::string, double>;
+		using FuncMap = std::unordered_map<std::string, FuncData>;
+
 	private:
-		enum class State : std::size_t;
+		enum class St : std::size_t;
 
 	public:
-		PostfixMathEvaluator(std::unordered_map<std::string, double> const& literals);
+		PostfixMathEvaluator(VarMap const& literals);
+		PostfixMathEvaluator(VarMap const& literals, FuncMap const& funcs);
 
-		double Eval(std::string const& exprString);
+		double Eval(std::string_view exprString);
 
 	private:
 		void DoIteration(char c);
@@ -22,12 +28,12 @@ namespace ArCalc {
 		void ParseSymbolicOperator(char op);
 
 		void ParseMinusSign(char c);
-		void HandleAddingLiteral();
+		void PushLiteralValue();
 
 	private:
-		void SetState(State newState);
+		void SetState(St newState);
 		void ResetState(char c);
-		State GetState() const noexcept;
+		St GetState() const noexcept;
 
 		void AddChar(char c);
 		std::string const& GetString() const;
@@ -42,18 +48,24 @@ namespace ArCalc {
 		void EvalFunction();
 		std::optional<double> CallFunction(std::string_view funcName, std::vector<double> const& args);
 
-		constexpr void IncrementCharIndex(size_t amount = 1U) { m_CharIndex += amount; }
-		constexpr size_t GetCharIndex() const { return m_CharIndex; }
+		constexpr void SetLineNumber(size_t toWhat) 
+			{ m_LineNumber = toWhat; }
+		constexpr size_t GetLineNumber() const 
+			{ return m_LineNumber; }
 
-		constexpr void SetLineNumber(size_t toWhat) { m_LineNumber = toWhat; }
-		constexpr size_t GetLineNumber() const { return m_LineNumber; }
+		constexpr void SetFuncMan(FunctionManager const& newMan) 
+			{ m_pFunMan = &newMan; }
 
 	private:
 		std::string m_CurrStringAcc{};
-		State m_CurrState{};
-		std::unordered_map<std::string, double> const& m_Literals{};
+		St m_CurrState{};
+		
+		VarMap m_Literals{};
 		ValueStack m_Values{};
-		size_t m_CharIndex{};
+		
 		size_t m_LineNumber{};
+
+		FuncMap m_Functions{};
+		FunctionManager const* m_pFunMan{};
 	};
 }

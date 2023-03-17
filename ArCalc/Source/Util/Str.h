@@ -91,7 +91,6 @@ namespace ArCalc::Str {
 		return TrimLeft<TReturn>(TrimRight<std::string_view>(str));
 	}
 
-	std::string FileToString(fs::path const& filePath);
 	std::string Mangle(std::string_view paramName, size_t paramIndex);
 
 	struct DemangledName {
@@ -107,5 +106,92 @@ namespace ArCalc::Str {
 			};
 		} 
 		else ARCALC_ERROR("Demangling invalidly mangled name [{}]", mangledName);
+	}
+
+	constexpr bool IsWhiteSpace(char c) {
+		switch (c) {
+		case ' ':
+		case '\t':
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	constexpr bool IsNotWhiteSpace(char c) {
+		return !IsWhiteSpace(c);
+	}
+
+	constexpr bool IsAlpha(char c) {
+		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z';
+	}
+
+	constexpr bool IsNum(char c) {
+		return c >= '0' && c <= '9';
+	}
+
+	constexpr bool IsAlNum(char c) {
+		return IsAlpha(c) || IsNum(c);
+	}
+
+	template <class ValueType> requires std::is_arithmetic_v<ValueType>
+	constexpr ValueType FromString(std::string_view str) {
+		if (auto const leftIndex{str.find_first_not_of(" \t")}; leftIndex != std::string_view::npos) {
+			str = str.substr(leftIndex, str.find_first_of(" \t", leftIndex));
+		}
+
+		ValueType resNum{};
+		auto const res{std::from_chars(str.data(), str.data() + str.size(), resNum)};
+		if (auto const [ptr, code] {res}; code != std::errc{}) {
+			ARCALC_THROW(ArCalcException, "Invalid Argument, found invalid character [{}] at index [{}]",
+				*ptr, ptr - str.data());
+		} 
+
+		return resNum;
+	}
+
+	template <std::integral IntType>
+	constexpr IntType StringToInt(std::string_view str) {
+		return FromString<std::decay_t<IntType>>(str);
+
+		/*auto numberRange{str | view::drop_while(IsWhiteSpace)
+			                 | view::take_while(IsNotWhiteSpace)};
+		ARCALC_EXPECT(!numberRange.empty(), "Passed in a string full of white space");
+
+		if (numberRange.front() == '-') {
+			if (std::is_unsigned_v<IntType>) {
+				ARCALC_THROW(ArCalcException, "Parsing negative number using unsigned type");
+			}
+			
+			std::make_signed_t<size_t> res{};
+			for (auto const c : numberRange | view::drop(1)) {
+				ARCALC_EXPECT(IsNum(c), "Found a non-numeric character [{}]", c);
+				res = 10 * res + (c - '0');
+			}
+			
+			return static_cast<IntType>(-res);
+		} 
+			
+		size_t res{};
+		for (auto const c : numberRange) {
+			ARCALC_EXPECT(IsNum(c), "Found a non-numeric character [{}]", c);
+			res = 10 * res + (c - '0');
+		}
+			
+		return static_cast<IntType>(res);*/
+	}
+
+	template <std::integral IntType>
+	constexpr std::optional<IntType> StringToIntOpt(std::string_view str) {
+		// Can't be done the other way around.
+		// This function must be implemented in terms of the StringToInt because, 
+		// this version is not tested and that one is.
+		try { return {StringToInt<IntType>(str)}; }
+		catch (ArCalcException&) { return {}; }
+	}
+
+	template <std::floating_point FloatType>
+	constexpr FloatType StringToFloat(std::string_view str) {
+		return FromString<std::decay_t<FloatType>>(str);
 	}
 }

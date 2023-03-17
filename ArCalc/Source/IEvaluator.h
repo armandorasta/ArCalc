@@ -5,6 +5,6 @@
 namespace ArCalc {
 	class IEvaluator {
 	public:
-		virtual double Eval(std::string const& exprString) = 0;
+		virtual double Eval(std::string_view exprString) = 0;
 	};
 }

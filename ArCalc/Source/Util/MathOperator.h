@@ -3,13 +3,7 @@
 #include "Core.h"
 
 namespace ArCalc {
-	enum class MathOperatorType : size_t {
-		Unary   = 0b0001,
-		Binary  = 0b0010,
-		Ternary = 0b0100,
-
-		UnaryOrBinary = Unary | Binary,
-	};
+	enum class MathOperatorType : size_t;
 
 	constexpr static size_t operator&(MathOperatorType lhs, MathOperatorType rhs) {
 		return static_cast<size_t>(lhs) & static_cast<size_t>(rhs);
@@ -21,10 +15,10 @@ namespace ArCalc {
 
 	class MathOperator {
 	private:
-		using OpType = MathOperatorType;
+		using OT = MathOperatorType;
 
 		struct OpInfo {
-			OpType Type;
+			OT Type;
 			std::function<double(std::vector<double> const&)> Func;
 		};
 
@@ -46,7 +40,7 @@ namespace ArCalc {
 		static double EvalUnary(std::string_view op, double operand);
 
 	private:
-		static void AddOperator(std::string const& glyph, OpType type,
+		static void AddOperator(std::string const& glyph, OT type,
 			std::function<double(std::vector<double> const&)>&& func);
 		static void AddUnaryOperator(std::string const& glyph, std::function<double(double)>&& func);
 		static void AddBinaryOperator(std::string const& glyph, std::function<double(double, double)>&& func);

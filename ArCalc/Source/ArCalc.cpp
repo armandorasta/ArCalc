@@ -8,6 +8,6 @@ int main() {
 		calc::App app{};
 		app.Run();
 	} catch (calc::ArCalcException const& err) {
-		std::cout << '\n' << err.GetMessage() << '\n';
+		std::cout << '\n' << err.GetMessage() << ".\n";
 	}
 }

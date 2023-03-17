@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <stacktrace>
 #include <random>
+#include <charconv>
 
 namespace ArCalc {
 	using size_t    = std::size_t;

@@ -112,6 +112,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -128,6 +129,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -139,7 +141,7 @@
   <ItemGroup>
     <ClCompile Include="Source\App.cpp" />
     <ClCompile Include="Source\ArCalc.cpp" />
-    <ClCompile Include="Source\Util\Function.cpp" />
+    <ClCompile Include="Source\Util\FunctionManager.cpp" />
     <ClCompile Include="Source\Util\IO.cpp" />
     <ClCompile Include="Source\Util\Keyword.cpp" />
     <ClCompile Include="Source\Util\MathConstant.cpp" />
@@ -154,7 +156,7 @@
     <ClInclude Include="Source\App.h" />
     <ClInclude Include="Source\Exception\ArCalcException.h" />
     <ClInclude Include="Source\Core.h" />
-    <ClInclude Include="Source\Util\Function.h" />
+    <ClInclude Include="Source\Util\FunctionManager.h" />
     <ClInclude Include="Source\IEvaluator.h" />
     <ClInclude Include="Source\Util\IO.h" />
     <ClInclude Include="Source\Util\Keyword.h" />
@@ -170,6 +172,7 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="Program.txt" />
+    <Text Include="Result.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

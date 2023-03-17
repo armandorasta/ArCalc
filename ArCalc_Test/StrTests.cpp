@@ -6,27 +6,29 @@
 
 using namespace ArCalc;
 
+#define STR_TEST(_testName) TEST_F(StrTests, _testName)
+
 class StrTests : public testing::Test {
 };
 
-TEST_F(StrTests, TrimLeft) {
+STR_TEST(TrimLeft) {
 	std::string const str{"  \t\t  \t Hello"};
 	ASSERT_EQ(Str::TrimLeft(str), "Hello");
 }
 
-TEST_F(StrTests, TrimRight) {
+STR_TEST(TrimRight) {
 	std::string const str{"Hello   \t\t  \t "};
 	ASSERT_EQ(Str::TrimRight(str), "Hello");
 }
 
-TEST_F(StrTests, Trim) {
+STR_TEST(Trim) {
 	std::string const str{"   \t\t  \t Hello   \t\t  \t "};
 	ASSERT_EQ(Str::Trim(str), "Hello");
 	ASSERT_EQ(Str::Trim(str), Str::TrimLeft(Str::TrimRight(str)));
 	ASSERT_EQ(Str::Trim(str), Str::TrimRight(Str::TrimLeft(str)));
 }
 
-TEST_F(StrTests, SplitOn_with_chaining) {
+STR_TEST(SplitOn_with_chaining) {
 	constexpr std::size_t MaxDelimCount{10};
 
 	std::vector<std::string> const saperatedString{"hello", "this", "is", "the", "resulting", "string"};
@@ -59,7 +61,7 @@ TEST_F(StrTests, SplitOn_with_chaining) {
 	}
 }
 
-TEST_F(StrTests, SplitOn_no_chaining) {
+STR_TEST(SplitOn_no_chaining) {
 	std::vector<std::pair<std::string, std::vector<std::string>>> strings{
 		{"Hello*baby!", {"Hello", "baby!"}},
 		{"Hello++*baby!", {"Hello", "", "", "baby!"}},
@@ -73,7 +75,7 @@ TEST_F(StrTests, SplitOn_no_chaining) {
 	}
 }
 
-TEST_F(StrTests, GetFirstTokenIndices) {
+STR_TEST(GetFirstTokenIndices) {
 	using Str::Secret::GetFirstTokenIndices;
 
 	auto const str{"    hello, this is my string"};
@@ -83,12 +85,89 @@ TEST_F(StrTests, GetFirstTokenIndices) {
 	ASSERT_EQ(10U, endIndex) << "Invalid end index";
 }
 
-TEST_F(StrTests, Name_mangling) {
+STR_TEST(Name_mangling) {
 	constexpr auto paramName{"my_param"};
 
 	for (auto const i : view::iota(0U, 10U)) {
 		auto const res{Str::Demangle(Str::Mangle(paramName, i))};
 		ASSERT_EQ(i, res.Index) << "Index was fucked up";
 		ASSERT_EQ(paramName, res.PackName) << "Paramter pack name was fucked up";
+	}
+}
+
+STR_TEST(String_to_int) {
+	for (auto const n : view::iota(-10, 10)) {
+		auto res{std::to_string(n)};
+
+		for (auto const i : view::iota(0U, 5U)) {
+			if (i % 2 == 0) {
+				switch (Random::Int(2)) {
+				case 1: res.push_back(' ' ); break;
+				case 2: res.push_back('\t'); break;
+				default: /*Aka 0*/           break;
+				}
+			} else {
+				switch (Random::Int(3)) {
+				case 1: res = ' '  + res;    break;
+				case 2: res = '\t' + res;    break;
+				default: /*Aka 0*/           break;
+				}
+			}
+
+			ASSERT_EQ(n, Str::StringToInt<decltype(n)>(res));
+			if (n < 0) { // Parsing negative number using unsigned type
+				ASSERT_ANY_THROW(Str::StringToInt<std::make_unsigned_t<decltype(n)>>(res));
+			}
+
+			// Invalid characters.
+			//auto copy{res};
+			//copy[copy.size() / 2] = 'g';
+			//EXPECT_ANY_THROW(Str::StringToInt<decltype(n)>(copy));
+
+			//copy[copy.size() / 2] = '#';
+			//ASSERT_ANY_THROW(Str::StringToInt<decltype(n)>(copy));
+		}
+	}
+}
+
+STR_TEST(String_to_float) {
+	for (auto const n : view::iota(-10, 10)) {
+		auto resFloat{std::to_string(n / 2.f)};
+		auto resInt{std::to_string(n / 2)};
+
+		for (auto const i : view::iota(0U, 5U)) {
+			if (i % 2 == 0) {
+				switch (Random::Int(2)) {
+				case 1: resFloat.push_back(' '); break;
+				case 2: resFloat.push_back('\t'); break;
+				default: /*Aka 0*/                break;
+				}
+			}
+			else {
+				switch (Random::Int(3)) {
+				case 1: resFloat = ' ' + resFloat;    break;
+				case 2: resFloat = '\t' + resFloat;    break;
+				default: /*Aka 0*/                     break;
+				}
+			}
+
+			ASSERT_FLOAT_EQ(n / 2.f, Str::StringToFloat<float>(resFloat));
+			ASSERT_FLOAT_EQ(static_cast<float>(n / 2), Str::StringToFloat<float>(resInt));
+
+			// Invalid characters.
+			/*auto fCopy{resFloat};
+			fCopy[fCopy.size() / 2] = 'g';
+			EXPECT_ANY_THROW(Str::StringToInt<decltype(n)>(fCopy));
+
+			fCopy[fCopy.size() / 2] = '#';
+			ASSERT_ANY_THROW(Str::StringToInt<decltype(n)>(fCopy));
+
+			auto iCopy{resInt};
+			iCopy[iCopy.size() / 2] = 'g';
+			EXPECT_ANY_THROW(Str::StringToInt<decltype(n)>(iCopy));
+
+			iCopy[iCopy.size() / 2] = '#';
+			ASSERT_ANY_THROW(Str::StringToInt<decltype(n)>(iCopy));*/
+		}
 	}
 }

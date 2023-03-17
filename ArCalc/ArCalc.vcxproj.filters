@@ -36,7 +36,7 @@
     <ClCompile Include="Source\Util\Keyword.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Util\Function.cpp">
+    <ClCompile Include="Source\Util\FunctionManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\ValueStack.cpp">
@@ -89,7 +89,7 @@
     <ClInclude Include="Source\Util\Keyword.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Util\Function.h">
+    <ClInclude Include="Source\Util\FunctionManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\Util\Str.h">
@@ -104,5 +104,6 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="Program.txt" />
+    <Text Include="Result.txt" />
   </ItemGroup>
 </Project>

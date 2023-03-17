@@ -1,12 +1,12 @@
 #include "PostfixMathEvaluator.h"
-#include "Util/Function.h"
 #include "Util/MathOperator.h"
 #include "Util/MathConstant.h"
+#include "Util/Str.h"
 #include "Exception/ArCalcException.h"
 #include "Parser.h"
 
 namespace ArCalc {
-	enum class PostfixMathEvaluator::State : std::size_t {
+	enum class PostfixMathEvaluator::St : std::size_t {
 		WhiteSpace,
 		FoundMinusSign,
 		HandledMinusSign,
@@ -17,14 +17,31 @@ namespace ArCalc {
 	};
 
 	PostfixMathEvaluator::PostfixMathEvaluator(std::unordered_map<std::string, double> const& literals)
-		: m_Literals{literals} 
+		: PostfixMathEvaluator{literals, {}}
 	{
+	}
+
+	PostfixMathEvaluator::PostfixMathEvaluator(std::unordered_map<std::string, double> const& literals, 
+		FuncMap const& funcs) : m_Literals{literals}, m_Functions{funcs}
+	{
+		// Validate the input map.
+		for (auto const& [name, _value] : m_Literals) {
+			// First character may not be a number.
+			ARCALC_ASSERT(IsCharValidForIdent(name[0]) && !Str::IsNum(name[0]),
+				"Found Invalid literal name [{}] in literal map", name);
+
+			for (auto const c : name | view::drop(1U)) {
+				ARCALC_ASSERT(IsCharValidForIdent(c), "Found Invalid literal name [{}] in literal map", 
+					name);
+			}
+		}
+
 		if (!MathOperator::IsInitialized()) {
 			MathOperator::Initialize();
 		}
 	}
 
-	double PostfixMathEvaluator::Eval(std::string const& exprString) {
+	double PostfixMathEvaluator::Eval(std::string_view exprString) {
 		ARCALC_ASSERT(!exprString.empty(), "Evaluating empty expression");
 		
 		for (auto const c : exprString) {
@@ -44,21 +61,11 @@ namespace ArCalc {
 
 	void PostfixMathEvaluator::DoIteration(char c) {
 		switch (GetState()) {
-		case State::WhiteSpace:
-			ParseWhiteSpace(c);
-			break;
-		case State::ParsingIdentifier:
-			ParseIdentifier(c);
-			break;
-		case State::ParsingOperator:
-			ParseSymbolicOperator(c);
-			break;
-		case State::ParsingNumber:
-			ParseNumber(c);
-			break;
-		case State::FoundMinusSign:
-			ParseMinusSign(c);
-			break;
+		case St::WhiteSpace:        ParseWhiteSpace(c); break;
+		case St::ParsingIdentifier: ParseIdentifier(c); break;
+		case St::ParsingOperator:   ParseSymbolicOperator(c); break;
+		case St::ParsingNumber:     ParseNumber(c); break;
+		case St::FoundMinusSign:    ParseMinusSign(c); break;
 		}
 	}
 
@@ -66,14 +73,14 @@ namespace ArCalc {
 		if (std::isspace(c)) {
 			return;
 		} else if (std::isalpha(c) || c == '_') {
-			SetState(State::ParsingIdentifier);
+			SetState(St::ParsingIdentifier);
 			ParseIdentifier(c);
 		} else if (std::isdigit(c) || c == '.') {  
 			// The second condition allows ".5" instead of the long-winded "0.5".
-			SetState(State::ParsingNumber);
+			SetState(St::ParsingNumber);
 			ParseNumber(c);
 		} else {
-			SetState(State::ParsingOperator);
+			SetState(St::ParsingOperator);
 			ParseSymbolicOperator(c);
 		}
 	}
@@ -90,10 +97,14 @@ namespace ArCalc {
 			EvalOperator();
 		} else if (MathConstant::IsValid(literalName)) {
 			m_Values.Push(MathConstant::ValueOf(literalName));
-		} else if (Function::IsDefined(literalName)) {
+		} else if (m_Functions.contains(literalName)) {
 			EvalFunction();
+		} else if (literalName != "_Last" && Keyword::IsValid(literalName)) {
+			// Only valid keyword in this context is _Last
+			ARCALC_ERROR("Found keyword [{}] in invalid context (in the middle of an expression)", 
+				literalName);
 		} else {
-			HandleAddingLiteral();
+			PushLiteralValue();
 		}
 		ResetString();
 		ResetState(c);
@@ -124,7 +135,7 @@ namespace ArCalc {
 			ResetState(op);
 		} else {
 			if (op == '-') { // Could be a negative number.
-				SetState(State::FoundMinusSign);
+				SetState(St::FoundMinusSign);
 			}
 			AddChar(op);
 		}
@@ -136,15 +147,15 @@ namespace ArCalc {
 			ResetString();
 			ResetState(c);
 		} else if (std::isdigit(c) || c == '.') {
-			SetState(State::ParsingNumber);
+			SetState(St::ParsingNumber);
 			ParseNumber(c);
 		} else {
-			SetState(State::ParsingIdentifier);
+			SetState(St::ParsingIdentifier);
 			ParseIdentifier(c);
 		}
 	}
 
-	void PostfixMathEvaluator::HandleAddingLiteral() {
+	void PostfixMathEvaluator::PushLiteralValue() {
 		auto literalName{GetString()};
 
 		auto const bMinusSign{literalName.starts_with('-')};
@@ -155,18 +166,18 @@ namespace ArCalc {
 		m_Values.Push(Deref(literalName) * (bMinusSign ? -1.0 : 1.0));
 	}
 
-	void PostfixMathEvaluator::SetState(State newState) {
+	void PostfixMathEvaluator::SetState(St newState) {
 		m_CurrState = newState;
 	}
 
 	void PostfixMathEvaluator::ResetState(char c) {
-		SetState(State::WhiteSpace);
+		SetState(St::WhiteSpace);
 		if (!std::isspace(c)) {
 			DoIteration(c);
 		}
 	}
 
-	PostfixMathEvaluator::State PostfixMathEvaluator::GetState() const noexcept {
+	PostfixMathEvaluator::St PostfixMathEvaluator::GetState() const noexcept {
 		return m_CurrState;
 	}
 
@@ -189,22 +200,23 @@ namespace ArCalc {
 		if (auto const it{m_Literals.find(glyph)}; it != m_Literals.end()) {
 			return it->second;
 		}
-		else ARCALC_ERROR("Use of undefined literal: {}", glyph);
+		else ARCALC_ERROR("Use of undefined literal [{}]", glyph);
 	}
 
 	void PostfixMathEvaluator::EvalOperator() {
 		auto const& glyph{GetString()};
-		ARCALC_ASSERT(MathOperator::IsValid(glyph), "Invalid operator [{}]", glyph);
+		ARCALC_EXPECT(MathOperator::IsValid(glyph), "Invalid operator [{}]", glyph);
+
 		if (MathOperator::IsBinary(glyph)) {
-			ARCALC_ASSERT(m_Values.Size() > 0, "Found binary operator [{}] with no operands", glyph);
-			ARCALC_ASSERT(m_Values.Size() > 1, "Found binary operator [{}] with 1 operand with value [{}]",
+			ARCALC_EXPECT(m_Values.Size() > 0, "Found binary operator [{}] with no operands", glyph);
+			ARCALC_EXPECT(m_Values.Size() > 1, "Found binary operator [{}] with 1 operand with value [{}]",
 				glyph, m_Values.Top());
 
 			auto const rhs{m_Values.Pop()};
 			auto const lhs{m_Values.Top()};
 			m_Values.Top() = MathOperator::EvalBinary(glyph, lhs, rhs);
 		} else {
-			ARCALC_ASSERT(m_Values.Size() > 0, "Found unary operator [{}] with no operands", glyph);
+			ARCALC_EXPECT(m_Values.Size() > 0, "Found unary operator [{}] with no operands", glyph);
 			auto const operand{m_Values.Top()};
 			m_Values.Top() = MathOperator::EvalUnary(glyph, operand);
 		}
@@ -213,11 +225,12 @@ namespace ArCalc {
 	void PostfixMathEvaluator::EvalFunction() {
 		auto const funcName{GetString()};
 		std::vector<double> args{};
-		auto const paramCount{Function::ParamCountOf(funcName)};
+		auto const func{m_Functions.at(funcName)};
+		auto const paramCount{func.Params.size()};
 		if (m_Values.Size() >= paramCount) {
 			args.resize(paramCount);
-			for (size_t i : view::iota(0U, paramCount)) {
-				args[paramCount - i - 1] = m_Values.Pop();
+			for (size_t i : view::iota(0U, paramCount) | view::reverse) {
+				args[i] = m_Values.Pop();
 			}
 		} else {
 			// the Function is class is responsible for handling the case where the number of values on the stack 
@@ -226,21 +239,23 @@ namespace ArCalc {
 		}
 
 		try {
-			if (auto const returnValue{Parser::CallFunction(funcName, args)}; returnValue) {
-				m_Values.Push(*returnValue);
-			}
+			ARCALC_NOT_IMPLEMENTED();
+			// BIG PROBLEM
+			// if (auto const returnValue{m_pFunMan->CallFunction(funcName, args)}; returnValue) {
+			// 	m_Values.Push(*returnValue);
+			// }
 		} catch (ArCalcException& err) {
-			err.SetLineNumber(err.GetLineNumber() + Function::HeaderLineNumberOf(funcName));
+			err.SetLineNumber(err.GetLineNumber() + func.HeaderLineNumber);
 			err.LockNumberLine();
 			throw;
 		}
 	}
 
 	bool PostfixMathEvaluator::IsCharValidForIdent(char c) {
-		return std::isalnum(c) || c == '_';
+		return Str::IsAlNum(c) || c == '_';
 	}
 
 	bool PostfixMathEvaluator::IsCharValidForNumber(char c) {
-		return std::isdigit(c) || c == '\'' || c == '.';
+		return Str::IsNum(c) || c == '\'' || c == '.';
 	}
 }
