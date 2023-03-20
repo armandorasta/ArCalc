@@ -14,6 +14,7 @@ namespace ArCalc {
 		double& Top();
 		size_t Size() const;
 		bool IsEmpty() const;
+		void Clear();
 
 	private:
 		std::stack<double> m_Data{};

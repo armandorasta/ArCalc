@@ -1,19 +1,21 @@
 #include "FunctionManager.h"
 #include "Util.h"
 #include "Exception/ArCalcException.h"
+#include "../Parser.h"
 
 namespace ArCalc {
-	FunctionManager::FunctionManager(Parser& parent) : m_pParent{&parent} {
-	}
-
 	std::ostream& operator<<(std::ostream& os, FuncReturnType retype) {
 		switch (retype) {
 		using enum FuncReturnType;
-		case Number:	return os << "Number";
-		case None:		return os << "None";
-		default:		return os << "Invalid FuncReturnType";
+		case Number: return os << "Number";
+		case None:   return os << "None";
+		default:     return os << "Invalid FuncReturnType";
 		}
 	}
+
+	FunctionManager::FunctionManager(std::ostream& os) : m_pOStream{&os} {
+	}
+
 
 	bool FunctionManager::IsDefined(std::string_view name) const {
 		return m_FuncMap.contains(std::string{name});
@@ -106,5 +108,43 @@ namespace ArCalc {
 	FuncData const& FunctionManager::Get(std::string_view funcName) const {
 		ARCALC_ASSERT(IsDefined(funcName), "{} on invalid function [{}]", Util::FuncName(), funcName);
 		return m_FuncMap.at(std::string{funcName});
+	}
+
+	std::optional<double> FunctionManager::CallFunction(std::string_view funcName, 
+		std::vector<double> const& args) 
+	{
+		ARCALC_ASSERT(IsDefined(funcName), "Call of undefined function [{}]", funcName);
+
+		auto func{Get(funcName)};
+		auto const bVariadic{func.IsVariadic};
+		if (args.size() < func.Params.size()) {
+			if (bVariadic) {
+				ARCALC_THROW(ArCalcException,  
+					"Variadic function [{}] expects at least [{}] arguments but only [{}] were passed",
+					funcName, func.Params.size(), args.size());
+			}
+			else ARCALC_THROW(ArCalcException, 
+				"Invalid number of arguments passed to [{}], expected {} but {} were passed",
+				funcName, func.Params.size(), args.size());
+		} 
+
+		// Perparing function parameter values
+		for (auto const i : view::iota(0U, args.size())) {
+			func.Params[i].Values.push_back(args[i]);
+		}
+
+		if (bVariadic) {
+			auto& parameterPack{func.Params.back().Values};
+			for (auto const arg : args | view::drop(func.Params.size())) { // Drop the named arguments.
+				parameterPack.push_back(arg);
+			}
+		}
+
+		auto subParser = Parser{*m_pOStream, func.Params, false};
+		for (auto const& codeLine : func.CodeLines) {
+			subParser.ParseLine(codeLine);
+		}
+
+		return subParser.GetReturnValue();
 	}
 }

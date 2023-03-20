@@ -8,16 +8,15 @@ namespace ArCalc {
 	class PostfixMathEvaluator : public IEvaluator {
 	public:
 		using VarMap = std::unordered_map<std::string, double>;
-		using FuncMap = std::unordered_map<std::string, FuncData>;
 
 	private:
 		enum class St : std::size_t;
 
 	public:
-		PostfixMathEvaluator(VarMap const& literals);
-		PostfixMathEvaluator(VarMap const& literals, FuncMap const& funcs);
+		PostfixMathEvaluator(VarMap const& literals, FunctionManager& funMan);
 
 		double Eval(std::string_view exprString);
+		void Reset();
 
 	private:
 		void DoIteration(char c);
@@ -53,9 +52,6 @@ namespace ArCalc {
 		constexpr size_t GetLineNumber() const 
 			{ return m_LineNumber; }
 
-		constexpr void SetFuncMan(FunctionManager const& newMan) 
-			{ m_pFunMan = &newMan; }
-
 	private:
 		std::string m_CurrStringAcc{};
 		St m_CurrState{};
@@ -65,7 +61,6 @@ namespace ArCalc {
 		
 		size_t m_LineNumber{};
 
-		FuncMap m_Functions{};
-		FunctionManager const* m_pFunMan{};
+		FunctionManager& m_FunMan;
 	};
 }

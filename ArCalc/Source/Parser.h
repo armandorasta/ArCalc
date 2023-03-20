@@ -74,39 +74,46 @@ namespace ArCalc {
 		};
 
 	public:
-		Parser();
-		Parser(std::vector<ParamData> const& paramData, bool bValidation);
+		Parser(Parser const&)         = default;
+		Parser(Parser&&)              = default;
+		auto operator=(Parser const&) = delete;
+		auto operator=(Parser&&)      = delete;
+
+		Parser(std::ostream& os);
+		Parser(std::ostream& os, std::vector<ParamData> const& paramData, bool bValidation);
 
 		static void ParseFile(fs::path const& filePath);
 		static void ParseFile(fs::path const& filePath, fs::path const& outFilePath);
 		static void ParseIStream(std::istream& is);
 		static void ParseIStream(std::istream& is, std::ostream& resultOStream);
 		
-		std::optional<double> CallFunction(std::string_view funcName, std::vector<double> const& args);
-
 		void ParseLine(std::string_view line);
 		void ListVarNames(std::string_view prefix);
 
-		void SetOutStream(std::ostream& toWhat);
+		void SetOStream(std::ostream& toWhat);
+		std::ostream& GetOStream();
 
 		bool IsVisible(std::string_view varName) const;
 		double Deref(std::string_view varName) const;
 		double GetLast() const;
 
 		bool IsFunction(std::string_view funcName) const;
-		constexpr bool IsParsingFunction() const 
+		constexpr bool IsExecutingFunction() const 
 			{ return m_bInFunction; }
+		bool IsParsingFunction() const;
 		
 		constexpr size_t GetLineNumber() const 
 			{ return m_LineNumber; }
 		constexpr bool IsLineEndsWithSemiColon() const 
 			{ return m_bSemiColon; }
 
+		double GetReturnValue();
+
 	private:
 		void HandleFirstToken();
 		void SetVar(std::string_view name, double value);
 		double GetVar(std::string_view name) const;
-		double Eval(std::string_view exprString) const;
+		double Eval(std::string_view exprString);
 		constexpr void IncrementLineNumber(size_t inc = 1U) 
 			{ m_LineNumber += inc; }
 		
@@ -131,7 +138,7 @@ namespace ArCalc {
 			{ return m_CurrState; }
 		
 	private:
-		FunctionManager m_FunMan{*this};
+		FunctionManager m_FunMan;
 
 		std::string_view m_CurrentLine{};
 		std::unordered_map<std::string, double> m_VarMap{};
@@ -147,6 +154,6 @@ namespace ArCalc {
 
 		std::unique_ptr<Parser> m_pValidationSubParser{};
 
-		std::ostream* m_pOutStream{&std::cout};
+		std::ostream* m_pOutStream{};
 	};
 }

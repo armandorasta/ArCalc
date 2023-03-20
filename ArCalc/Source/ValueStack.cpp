@@ -29,4 +29,11 @@ namespace ArCalc {
 	bool ValueStack::IsEmpty() const {
 		return m_Data.empty();
 	}
+
+	void ValueStack::Clear() {
+		while (!m_Data.empty()) {
+			m_Data.pop();
+		}
+	}
+
 }

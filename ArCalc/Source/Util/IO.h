@@ -22,32 +22,26 @@ namespace ArCalc::IO {
 		return Input<ValueType>(std::cin);
 	}
 
-	namespace Secret {
-		template <class Condtion>
-		concept Not = !Condtion::value;
-	}
-
-	template <class ValueType> requires Secret::Not<std::is_const<ValueType>>
+	template <class ValueType> requires (!std::is_const_v<ValueType>)
 	void Input(std::istream& is, ValueType* pOutValue) {
 		is >> *pOutValue;
 	}
 
 	template <class ValueType>
-	auto InputStd(ValueType* pOutValue) requires requires { Input(std::cin, pOutValue); }
-	{
+	auto InputStd(ValueType* pOutValue) requires requires { Input(std::cin, pOutValue); } {
 		return Input(std::cin, pOutValue);
 	}
 
 	template<class ValueType>
-	std::ostream& Output(std::ostream& os, ValueType&& what)  requires requires 
-	{ os << std::forward<ValueType>(what); } 
+	std::ostream& Output(std::ostream& os, ValueType&& what) requires requires 
+		{ os << std::forward<ValueType>(what); } 
 	{
 		return os << std::forward<ValueType>(what);
 	}
 
 	template<class ValueType>
 	std::ostream& OutputStd(ValueType&& what) requires requires 
-	{ Output(std::cout, std::forward<ValueType>(what)); } 
+		{ Output(std::cout, std::forward<ValueType>(what)); } 
 	{
 		return Output(std::cout, std::forward<ValueType>(what));
 	}
@@ -62,7 +56,7 @@ namespace ArCalc::IO {
 
 	template <class... FormatArgs> 
 	constexpr auto PrintStd(std::string_view formatString, FormatArgs&&... fmtArgs) requires requires
-	{ Print(std::cout, formatString, std::forward<FormatArgs>(fmtArgs)...); }
+		{ Print(std::cout, formatString, std::forward<FormatArgs>(fmtArgs)...); }
 	{
 		return Print(std::cout, formatString, std::forward<FormatArgs>(fmtArgs)...);
 	}
@@ -75,7 +69,7 @@ namespace ArCalc::IO {
 			{ con.data() } -> std::same_as<char*>;
 			{ con.size() } -> std::same_as<size_t>;
 			con.resize(std::declval<size_t>());
-	}
+		}
 	ByteContainer IStreamToContainer(std::istream& is, bool bKeepTrailingNulls) {
 		ByteContainer bytes{};
 
@@ -85,6 +79,7 @@ namespace ArCalc::IO {
 		else return {}; // Stream is empty? an empty string will do.
 
 		is.read(bytes.data(), bytes.size());
+
 		if (!bKeepTrailingNulls) { // Chop-off the null characters at the end?
 			for (size_t i : view::iota(0U, bytes.size()) | view::reverse) {
 				if (bytes[i] != '\0') {

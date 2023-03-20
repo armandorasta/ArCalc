@@ -33,11 +33,13 @@ namespace ArCalc {
 	};
 
 
-	Parser::Parser() : m_CurrState{St::Default} {
+	Parser::Parser(std::ostream& os) : m_CurrState{St::Default}, m_pOutStream{&os}, m_FunMan{os} {
 		SetVar("_Last", 0.0);
 	}
 
-	Parser::Parser(std::vector<ParamData> const& paramData, bool bValidation) : Parser{} {
+	Parser::Parser(std::ostream& os, std::vector<ParamData> const& paramData, bool bValidation) 
+		: Parser{os} 
+	{
 		m_bInFunction = true;
 
 		if (bValidation) {
@@ -87,11 +89,9 @@ namespace ArCalc {
 
 	void Parser::ParseIStream(std::istream& is, std::ostream& resultOStream) {
 		auto const streamBytes{IO::IStreamToString(is)};
-		auto const lines{Str::SplitOn<std::string_view>(streamBytes, "\n", false)};
 
-		auto subParser = Parser{};
-		subParser.SetOutStream(resultOStream);
-		for (auto const& line : lines) {
+		auto subParser = Parser{resultOStream};
+		for (auto const& line : Str::SplitOn<std::string_view>(streamBytes, "\n", false)) {
 			subParser.ParseLine(line);
 		}
 	}
@@ -141,17 +141,22 @@ namespace ArCalc {
 	void Parser::ListVarNames(std::string_view prefix = "") {
 		constexpr auto Tab = "    ";
 
-		IO::Output(*m_pOutStream, "{\n");
+		auto& os{GetOStream()};
+		IO::Output(os, "{\n");
 		for (auto const& [name, value] : m_VarMap) {
 			if (name != "_Last" && name.starts_with(prefix)) {
-				IO::Print(*m_pOutStream, "{}{} = {}\n", Tab, name, value);
+				IO::Print(os, "{}{} = {}\n", Tab, name, value);
 			}
 		}
-		IO::Output(*m_pOutStream, "}");
+		IO::Output(os, "}");
 	}
 
-	void Parser::SetOutStream(std::ostream& toWhat) {
+	void Parser::SetOStream(std::ostream& toWhat) {
 		m_pOutStream = &toWhat;
+	}
+
+	std::ostream& Parser::GetOStream() {
+		return *m_pOutStream;
 	}
 
 	bool Parser::IsVisible(std::string_view varName) const {
@@ -174,6 +179,19 @@ namespace ArCalc {
 	bool Parser::IsFunction(std::string_view funcName) const {
 		return m_FunMan.IsDefined(funcName);
 	}
+
+	bool Parser::IsParsingFunction() const { 
+		return GetState() == St::Val_LineCollection; 
+	}
+
+	double Parser::GetReturnValue() {
+		ARCALC_ASSERT(m_ReturnValueRegister.has_value(), "Tried to get non-existant return value");
+		auto const returnValue{m_ReturnValueRegister.value()};
+		m_ReturnValueRegister.reset();
+
+		return returnValue;
+	}
+
 
 	void Parser::HandleFirstToken() {
 		auto const firstToken{Str::GetFirstToken(m_CurrentLine)};
@@ -205,8 +223,8 @@ namespace ArCalc {
 		else ARCALC_ERROR("Use of unset variable {}", name);
 	}
 
-	double Parser::Eval(std::string_view exprString) const {
-		try { return PostfixMathEvaluator{m_VarMap}.Eval(exprString); } 
+	double Parser::Eval(std::string_view exprString) {
+		try { return PostfixMathEvaluator{m_VarMap, m_FunMan}.Eval(exprString); } 
 		catch (ArCalcException& err) {
 			err.SetLineNumber(GetLineNumber());
 			throw;
@@ -227,7 +245,7 @@ namespace ArCalc {
 		SetVar(name, value);
 
 		if (state == St::Default && !IsLineEndsWithSemiColon()) {
-			IO::Print(*m_pOutStream, "{} = {}\n", name, value);
+			IO::Print(GetOStream(), "{} = {}\n", name, value);
 		}
 	}
 
@@ -278,7 +296,7 @@ namespace ArCalc {
 		}
 
 		// Check function body for syntax errors
-		m_pValidationSubParser = std::make_unique<Parser>(m_FunMan.CurrParamData(), true);
+		m_pValidationSubParser = std::make_unique<Parser>(GetOStream(), m_FunMan.CurrParamData(), true);
 		m_pValidationSubParser->SetState(St::Val_SubParser);
 		SetState(St::Val_LineCollection);
 	}
@@ -286,7 +304,10 @@ namespace ArCalc {
 	void Parser::HandleReturnKeyword() {
 		switch (GetState()) {
 		case St::Default: {
-			ARCALC_ASSERT(IsParsingFunction(), "Found {} in global scope", KeywordType::Return);
+			if (!IsExecutingFunction()) {
+				ARCALC_THROW(ArCalcException, "Found {} in global scope", KeywordType::Return);
+			}
+
 			AssertKeyword(Str::ChopFirstToken(m_CurrentLine), KeywordType::Return);
 			if (m_CurrentLine.empty()) {
 				m_ReturnValueRegister = {};
@@ -308,41 +329,6 @@ namespace ArCalc {
 		}
 	}
 
-	std::optional<double> Parser::CallFunction(std::string_view funcName, std::vector<double> const& args) {
-		ARCALC_ASSERT(m_FunMan.IsDefined(funcName), "Call of undefined function [{}]", funcName);
-		
-		auto func{m_FunMan.Get(funcName)};
-		auto const bVariadic{func.IsVariadic};
-		if (args.size() < func.Params.size()) {
-			if (bVariadic) {
-				ARCALC_THROW(ArCalcException,  
-					"Variadic function [{}] expects at least [{}] arguments but only [{}] were passed",
-					funcName, func.Params.size(), args.size());
-			}
-			else ARCALC_THROW(ArCalcException, 
-				"Invalid number of arguments passed to [{}], expected {} but {} were passed",
-				funcName, func.Params.size(), args.size());
-		} 
-
-		// Perparing function parameter values
-		for (auto const i : view::iota(0U, args.size())) {
-			func.Params[i].Values.push_back(args[i]);
-		}
-
-		if (bVariadic) {
-			auto& parameterPack{func.Params.back().Values};
-			for (auto const arg : args | view::drop(func.Params.size())) { // Drop the named arguments.
-				parameterPack.push_back(arg);
-			}
-		}
-		
-		auto subParser = Parser{func.Params, false};
-		for (auto const& codeLine : func.CodeLines) {
-			subParser.ParseLine(codeLine);
-		}
-		return subParser.m_ReturnValueRegister;
-	}
-
 	void Parser::AddFunctionLine() {
 		// TODO: Handle end of function more generally.
 
@@ -360,7 +346,7 @@ namespace ArCalc {
 
 	void Parser::HandleSelectionKeyword() {
 		// The flag must be turned on when creating the sub-parser for validation as well!!!
-		ARCALC_ASSERT(IsParsingFunction(), "Found selection statement in global scope");
+		ARCALC_ASSERT(IsExecutingFunction(), "Found selection statement in global scope");
 
 		auto const state{GetState()};
 		
@@ -380,12 +366,8 @@ namespace ArCalc {
 			else ARCALC_UNREACHABLE_CODE();
 
 			if (statement.empty()) {
-				if (state == St::Default) {
-					SetState(St::SelectionNewLine);
-				} else if (state == St::Val_SubParser) {
-					SetState(St::Val_SelectionNewLine);
-				} 
-				else ARCALC_UNREACHABLE_CODE();
+				SetState(state == St::Default ? St::SelectionNewLine 
+					                          : St::Val_SelectionNewLine);
 			} else {
 				m_CurrentLine = statement;
 				HandleConditionalBody(state == St::Val_SubParser || *m_bConditionRegister); 
@@ -401,12 +383,8 @@ namespace ArCalc {
 			else ARCALC_UNREACHABLE_CODE();
 
 			if (m_CurrentLine.empty()) {
-				if (state == St::Default) {
-					SetState(St::SelectionNewLine);
-				} else if (state == St::Val_SubParser) {
-					SetState(St::Val_SelectionNewLine);
-				}
-				else ARCALC_UNREACHABLE_CODE();
+				SetState(state == St::Default ? St::SelectionNewLine 
+					                          : St::Val_SelectionNewLine);
 			}
 			else HandleConditionalBody(state == St::Val_SubParser || *m_bConditionRegister);
 			break;
@@ -419,8 +397,8 @@ namespace ArCalc {
 		auto const state{GetState()}; // This cache is necessary!!!
 		if (!( state == St::Default                // For same line statements.
 			|| state == St::SelectionNewLine       // For next line statements.
-			|| state == St::Val_SubParser          // For validation next line statements.
-			|| state == St::Val_SelectionNewLine)) // For validation same line statements.
+			|| state == St::Val_SubParser          // For validation of same line statements.
+			|| state == St::Val_SelectionNewLine)) // For validation of next line statements.
 		{
 			ARCALC_UNREACHABLE_CODE();
 		}
@@ -431,12 +409,8 @@ namespace ArCalc {
 			HandleFirstToken();
 		}
 
-		if (state == St::SelectionNewLine) { // Finish the block.
-			SetState(St::Default);
-		} else if (state == St::Val_SelectionNewLine) { // Continue the validation process
-			SetState(St::Val_SubParser);
-		}
-
+		SetState(state == St::SelectionNewLine ? St::Default         // Finish the block.
+			                                   : St::Val_SubParser); // Continue the validation process.
 		/*
 
 			TODO: Add return keyword.
@@ -487,7 +461,7 @@ namespace ArCalc {
 
 		auto const res{Eval(m_CurrentLine)};
 		if (state == St::Default) {
-			IO::Print(*m_pOutStream, "{}\n", res);
+			IO::Print(GetOStream(), "{}\n", res);
 			SetVar("_Last", res);
 		} 
 	}
@@ -506,7 +480,7 @@ namespace ArCalc {
 			"Expected identifier, but found math constant ({})", what);
 
 		for (auto const c : what) {
-			if (!std::isalnum(c) && c != '_') {
+			if (!Str::IsAlNum(c) && c != '_') {
 				ARCALC_ERROR("Found invalid character [{}] in indentifier [{}]", c, what);
 			}
 		}

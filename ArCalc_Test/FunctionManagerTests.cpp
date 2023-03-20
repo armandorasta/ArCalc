@@ -7,6 +7,14 @@
 using namespace ArCalc;
 
 class FunctionManagerTests : public testing::Test {
+private:
+	inline static std::stringstream s_BullshitSS{};
+
+public:
+	FunctionManager GetTestingInstance() {
+		return FunctionManager{s_BullshitSS};
+	}
+
 protected:
 	constexpr static auto sc_FuncName{"Shit"};
 	constexpr static size_t sc_ParamCount{3};
@@ -18,7 +26,7 @@ protected:
 };
 
 FUNMAN_TEST(Defining_a_function) {
-	FunctionManager funMan{};
+	auto funMan{GetTestingInstance()};
 	ASSERT_FALSE(funMan.IsDefinationInProgress());
 
 	funMan.BeginDefination(sc_FuncName, sc_LineNumber);
@@ -63,7 +71,7 @@ FUNMAN_TEST(Defining_a_function) {
 }
 
 FUNMAN_TEST(Double_defination) {
-	FunctionManager funMan{};
+	auto funMan{GetTestingInstance()};
 
 	funMan.BeginDefination(sc_FuncName, sc_LineNumber);
 	funMan.AddParam("a");
@@ -74,7 +82,7 @@ FUNMAN_TEST(Double_defination) {
 }
 
 FUNMAN_TEST(Function_not_variadic_and_returns_number) {
-	FunctionManager funMan{};
+	auto funMan{GetTestingInstance()};
 
 	funMan.BeginDefination(sc_FuncName, sc_LineNumber);
 	funMan.SetReturnType(FuncReturnType::Number);
@@ -93,7 +101,7 @@ FUNMAN_TEST(Function_not_variadic_and_returns_number) {
 }
 
 FUNMAN_TEST(Function_variadic_and_returns_none) {
-	FunctionManager funMan{};
+	auto funMan{GetTestingInstance()};
 
 	funMan.BeginDefination(sc_FuncName, sc_LineNumber);
 	funMan.SetReturnType(FuncReturnType::None);

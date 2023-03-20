@@ -44,8 +44,18 @@ namespace ArCalc {
 	};
 }
 
-#define ARCALC_UNREACHABLE_CODE()   assert(false && "Should be unreachable")
-#define ARCALC_NOT_IMPLEMENTED()    assert(false && "Not implemented yet")
+#define ARCALC_UNREACHABLE_CODE() \
+	{ \
+		assert(!"Should be unreachable"); \
+		std::unreachable(); \
+	}
+
+#define ARCALC_NOT_IMPLEMENTED() \
+	{ \
+		assert(!"Not implemented yet"); \
+		std::unreachable(); \
+	}
+
 
 /// This macro is the same as ARCALC_ASSERT, except it survives in release builds as well.
 #define ARCALC_EXPECT(_cond, _message, ...) \
@@ -64,11 +74,7 @@ ARCALC_ERROR(_message, ...)
 
 #else // ^^^^^^ NDEBUG  vvvvvvv !NDEBUG
 
-#define ARCALC_ASSERT(_cond, _message, ...) \
-	if (!(_cond)) \
-		throw ::ArCalc::ArCalcException{std::vformat(_message, std::make_format_args(__VA_ARGS__))}
-
-#define ARCALC_ERROR(_message, ...)	\
-	throw ::ArCalc::ArCalcException{std::vformat(_message, std::make_format_args(__VA_ARGS__))}
+#define ARCALC_ASSERT(_cond, _message, ...) ARCALC_EXPECT(_cond, _message, __VA_ARGS__)
+#define ARCALC_ERROR(_message, ...)         ARCALC_THROW(ArCalcException, _message, __VA_ARGS__)
 
 #endif // NDEBUG

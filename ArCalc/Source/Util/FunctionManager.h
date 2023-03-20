@@ -2,7 +2,6 @@
 
 #include "Core.h"
 
-
 namespace ArCalc {
 	enum class FuncReturnType : size_t {
 		None = 0,
@@ -27,13 +26,17 @@ namespace ArCalc {
 
 	class FunctionManager {
 	private:
-		std::unordered_map<std::string, FuncData> m_FuncMap{};
+		using FuncMap = std::unordered_map<std::string, FuncData>;
 
 	public:
-		// For testing
-		FunctionManager() : m_pParent{} { }
+		FunctionManager(FunctionManager const&)             = default;
+		FunctionManager(FunctionManager&&)                  = default;
+		FunctionManager& operator=(FunctionManager const&)  = default;
+		FunctionManager& operator=(FunctionManager&&)       = default;
 
-		FunctionManager(class Parser& parent);
+		FunctionManager(std::ostream& os);
+
+		//FunctionManager(class Parser& parent);
 
 		void BeginDefination(std::string_view funcName, size_t lineNumber);
 		constexpr bool IsDefinationInProgress() const 
@@ -44,13 +47,14 @@ namespace ArCalc {
 		void SetReturnType(FuncReturnType retype);
 		void EndDefination();
 
+		bool IsDefined(std::string_view name) const;
 		FuncReturnType GetCurrentReturnType() const;
 		bool IsCurrFuncVariadic() const;
 		std::vector<ParamData> const& CurrParamData() const;
 		size_t CurrHeaderLineNumber() const;
 
-		bool IsDefined(std::string_view name) const;
 		FuncData const& Get(std::string_view funcName) const;
+		std::optional<double> CallFunction(std::string_view funcName, std::vector<double> const& args);
 
 		void Reset();
 		void ResetCurrFunc();
@@ -60,8 +64,10 @@ namespace ArCalc {
 		void MakeVariadic();
 
 	private:
-		class Parser* m_pParent;
+		//class Parser* m_pParent;
 		std::string m_CurrFuncName{};
 		FuncData m_CurrFuncData{};
+		std::unordered_map<std::string, FuncData> m_FuncMap{};
+		std::ostream* m_pOStream{};
 	};
 }

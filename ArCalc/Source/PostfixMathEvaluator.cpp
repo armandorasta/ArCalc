@@ -12,27 +12,25 @@ namespace ArCalc {
 		HandledMinusSign,
 
 		ParsingIdentifier,
+
 		ParsingNumber,
+		FoundSingleQuote, 
+
 		ParsingOperator,
 	};
 
-	PostfixMathEvaluator::PostfixMathEvaluator(std::unordered_map<std::string, double> const& literals)
-		: PostfixMathEvaluator{literals, {}}
-	{
-	}
-
-	PostfixMathEvaluator::PostfixMathEvaluator(std::unordered_map<std::string, double> const& literals, 
-		FuncMap const& funcs) : m_Literals{literals}, m_Functions{funcs}
+	PostfixMathEvaluator::PostfixMathEvaluator(VarMap const& literals, FunctionManager& funMan) 
+		: m_Literals{literals}, m_FunMan{funMan}
 	{
 		// Validate the input map.
 		for (auto const& [name, _value] : m_Literals) {
 			// First character may not be a number.
 			ARCALC_ASSERT(IsCharValidForIdent(name[0]) && !Str::IsNum(name[0]),
-				"Found Invalid literal name [{}] in literal map", name);
+				"Found Invalid literal name [{}] in literal map (starts with a number)", name);
 
 			for (auto const c : name | view::drop(1U)) {
-				ARCALC_ASSERT(IsCharValidForIdent(c), "Found Invalid literal name [{}] in literal map", 
-					name);
+				ARCALC_ASSERT(IsCharValidForIdent(c), 
+					"Found Invalid literal name [{}] in literal map", name);
 			}
 		}
 
@@ -59,12 +57,19 @@ namespace ArCalc {
 		return m_Values.Pop();
 	}
 
+	void PostfixMathEvaluator::Reset() {
+		ResetString();
+		m_Values.Clear();
+		m_CurrState = St::WhiteSpace;
+	}
+
 	void PostfixMathEvaluator::DoIteration(char c) {
 		switch (GetState()) {
 		case St::WhiteSpace:        ParseWhiteSpace(c); break;
 		case St::ParsingIdentifier: ParseIdentifier(c); break;
 		case St::ParsingOperator:   ParseSymbolicOperator(c); break;
-		case St::ParsingNumber:     ParseNumber(c); break;
+		case St::ParsingNumber:     
+		case St::FoundSingleQuote:  ParseNumber(c); break;
 		case St::FoundMinusSign:    ParseMinusSign(c); break;
 		}
 	}
@@ -97,15 +102,17 @@ namespace ArCalc {
 			EvalOperator();
 		} else if (MathConstant::IsValid(literalName)) {
 			m_Values.Push(MathConstant::ValueOf(literalName));
-		} else if (m_Functions.contains(literalName)) {
+		} else if (m_FunMan.IsDefined(literalName)) {
 			EvalFunction();
-		} else if (literalName != "_Last" && Keyword::IsValid(literalName)) {
+		} else if (m_Literals.contains(literalName)) {
+			PushLiteralValue();
+		} else if (Keyword::IsValid(literalName) && literalName != "_Last") {
 			// Only valid keyword in this context is _Last
 			ARCALC_ERROR("Found keyword [{}] in invalid context (in the middle of an expression)", 
 				literalName);
-		} else {
-			PushLiteralValue();
-		}
+		} 
+		else ARCALC_THROW(ArCalcException, "Used of invalid name [{}]", literalName);
+
 		ResetString();
 		ResetState(c);
 	}
@@ -116,9 +123,34 @@ namespace ArCalc {
 			"Found alphabetic character [{}] while parsing number", c
 		);
 
-		if (std::isdigit(c) || c == '.') { // The second condition also allows "10."
+		if (GetState() == St::FoundSingleQuote) {
+			switch (c) {
+			case '.':
+				ARCALC_THROW(ArCalcException,
+					"Found a ' just before a floating point while parsing a number");
+			case '\'':
+				ARCALC_THROW(ArCalcException, "Found two ' in a row while parsing a number");
+			default: // One of the rare reachable ones.
+				SetState(St::ParsingNumber);
+				break; // Advised by K & R them selves.
+			}
+		}
+		else SetState(St::ParsingNumber);
+
+		if (std::isdigit(c)) {
+			AddChar(c);
+		} else if (c == '.') {
+			if (range::distance(GetString() | view::filter(Util::Eq('.'))) > 0U) {
+				ARCALC_THROW(ArCalcException, "Found a number with multiple floating points");
+			}
 			AddChar(c);
 		} else if (c == '\'') { // Single quotes are for readability 10000000 => 10'000'000.
+			if (auto const acc{GetString()}; !acc.empty() && acc.back() == '.') {
+				ARCALC_THROW(ArCalcException, 
+					"Found a ' right after a floating point while parsing a number");
+			}
+
+			SetState(St::FoundSingleQuote); // To check for some errors later ^^^
 			return; // Ignore it.
 		} else {
 			// Finished parsing, evaluating...
@@ -225,7 +257,7 @@ namespace ArCalc {
 	void PostfixMathEvaluator::EvalFunction() {
 		auto const funcName{GetString()};
 		std::vector<double> args{};
-		auto const func{m_Functions.at(funcName)};
+		auto const func{m_FunMan.Get(funcName)};
 		auto const paramCount{func.Params.size()};
 		if (m_Values.Size() >= paramCount) {
 			args.resize(paramCount);
@@ -239,11 +271,9 @@ namespace ArCalc {
 		}
 
 		try {
-			ARCALC_NOT_IMPLEMENTED();
-			// BIG PROBLEM
-			// if (auto const returnValue{m_pFunMan->CallFunction(funcName, args)}; returnValue) {
-			// 	m_Values.Push(*returnValue);
-			// }
+			if (auto const returnValue{m_FunMan.CallFunction(funcName, args)}; returnValue) {
+				m_Values.Push(*returnValue);
+			}
 		} catch (ArCalcException& err) {
 			err.SetLineNumber(err.GetLineNumber() + func.HeaderLineNumber);
 			err.LockNumberLine();

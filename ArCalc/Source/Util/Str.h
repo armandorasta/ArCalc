@@ -102,7 +102,9 @@ namespace ArCalc::Str {
 		if (auto const index{mangledName.find("__", 2)}; index != std::string::npos) {
 			return {
 				.PackName{std::string{mangledName.substr(2U, index - 2)}},
-				.Index{static_cast<size_t>(std::atoi(mangledName.substr(index + 2, mangledName.size() - 2).data()))}
+				.Index{static_cast<size_t>(
+					std::atoi(mangledName.substr(index + 2, mangledName.size() - 2).data())
+				)}
 			};
 		} 
 		else ARCALC_ERROR("Demangling invalidly mangled name [{}]", mangledName);
@@ -153,7 +155,6 @@ namespace ArCalc::Str {
 	template <std::integral IntType>
 	constexpr IntType StringToInt(std::string_view str) {
 		return FromString<std::decay_t<IntType>>(str);
-
 		/*auto numberRange{str | view::drop_while(IsWhiteSpace)
 			                 | view::take_while(IsNotWhiteSpace)};
 		ARCALC_EXPECT(!numberRange.empty(), "Passed in a string full of white space");
