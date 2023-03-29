@@ -1,0 +1,46 @@
+F Add2 ( { ref 0 a } { ref 0 b } ) 1 1 {
+	_Return a b +;
+}
+F Sub2 ( { ref 0 a } { ref 0 b } ) 1 1 {
+	_Return a b -;
+}
+C fourThirteen 413
+C tenEighty 1080
+C fourThirteen 413
+C tenEighty 1080
+C fourThirteen 413
+C tenEighty 1080
+C fourThirteen 413
+C tenEighty 1080
+F Add2 ( { ref 0 a } { ref 0 b } ) 1 1 {
+	_Return a b +;
+}
+F Sub2 ( { ref 0 a } { ref 0 b } ) 1 1 {
+	_Return a b -;
+}
+C fourThirteen 413.000000
+C tenEighty 1080.000000
+F Add 2 ( { ref 0 a } { ref 0 b } ) 1 1 {
+	_Return a b +;
+}
+
+F Sub 2 ( { ref 0 a } { ref 0 b } ) 1 1 {
+	_Return a b -;
+}
+
+C fourThirteen 413
+C tenEighty 1080
+F Add 2 ( { ref 0 a } { ref 0 b } ) 1 1 {
+	_Return a b +;
+}
+
+F Sub 2 ( { ref 0 a } { ref 0 b } ) 1 1 {
+	_Return a b -;
+}
+
+C fourThirteen 413
+C tenEighty 1080
+C fourThirteen 413
+C tenEighty 1080
+C fourThirteen 413
+C tenEighty 1080

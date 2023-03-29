@@ -15,7 +15,7 @@ namespace ArCalc {
 	}
 
 	void MathOperator::Initialize() {
-		ARCALC_ASSERT(!IsInitialized(), "Double initialization of MathOperator");
+		ARCALC_DA(!IsInitialized(), "Double initialization of MathOperator");
 		AddBasicOperators();
 		AddTrigOperators();
 	}
@@ -25,24 +25,24 @@ namespace ArCalc {
 	}
 
 	bool MathOperator::IsUnary(std::string_view op) {
-		ARCALC_ASSERT(IsValid(op), "[IsUnary] Invalid operator: {}", op);
+		ARCALC_DA(IsValid(op), "[IsUnary] Invalid operator: {}", op);
 		return s_Operators.at(std::string{op}).Type & OT::Unary;
 	}
 
 	bool MathOperator::IsBinary(std::string_view op) {
-		ARCALC_ASSERT(IsValid(op), "[IsBinary] Invalid operator: {}", op);
+		ARCALC_DA(IsValid(op), "[IsBinary] Invalid operator: {}", op);
 		return s_Operators.at(std::string{op}).Type & OT::Binary;
 	}
 
 	double MathOperator::EvalBinary(std::string_view op, double lhs, double rhs) {
-		ARCALC_ASSERT(IsValid(op), "[EvalBinary] Invalid operator: {}", op);
-		ARCALC_ASSERT(IsBinary(op), "Evaluating non-binary operator [{}] using EvalBinary", op);
+		ARCALC_EXPECT(IsValid(op), "[EvalBinary] Invalid operator: {}", op);
+		ARCALC_EXPECT(IsBinary(op), "Evaluating non-binary operator [{}] using EvalBinary", op);
 		return s_Operators.at(std::string{op}).Func({lhs, rhs});
 	}
 
 	double MathOperator::EvalUnary(std::string_view op, double operand) {
-		ARCALC_ASSERT(IsValid(op), "[EvalUnary] Invalid operator: {}", op);
-		ARCALC_ASSERT(IsUnary(op), "Evaluating non-unary [{}] operator using EvalUnary", op);
+		ARCALC_EXPECT(IsValid(op), "[EvalUnary] Invalid operator: {}", op);
+		ARCALC_EXPECT(IsUnary(op), "Evaluating non-unary [{}] operator using EvalUnary", op);
 		return s_Operators.at(std::string{op}).Func({operand});
 	}
 

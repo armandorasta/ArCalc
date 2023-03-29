@@ -51,6 +51,15 @@
     <ClCompile Include="Source\Util\Random.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Util\LiteralManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Util\Ser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Util\Util.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\IEvaluator.h">
@@ -101,9 +110,18 @@
     <ClInclude Include="Source\Util\IO.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Util\LiteralManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Util\Ser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Program.txt" />
     <Text Include="Result.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="Source\NatvisFile.natvis" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 #include "Keyword.h"
+#include "../Exception/ArCalcException.h"
 
 namespace ArCalc {
 	std::vector<KeywordInfo> Keyword::s_KeywordMap{
@@ -11,14 +12,13 @@ namespace ArCalc {
 		{"_Else",   KT::Else},
 		{"_Elif",   KT::Elif},
 		{"_Return", KT::Return},
+		{"_Save",   KT::Save},
+		{"_Load",   KT::Load},
 	};
 
 	std::optional<Keyword::KT> Keyword::FromString(std::string_view glyph) {
 		auto const it{range::find(s_KeywordMap, std::string{glyph}, &KeywordInfo::Glyph)};
-		if (it != s_KeywordMap.end()) {
-			return {it->Type};
-		}
-		else return {};
+		return it != s_KeywordMap.end() ? it->Type : std::optional<KT>{};
 	}
 
 	bool Keyword::IsValid(std::string_view glyph) {
@@ -34,11 +34,28 @@ namespace ArCalc {
 		s_KeywordMap.push_back(std::move(info));
 	}
 
-	std::string const& Keyword::ToString(KT type) {
+	std::string Keyword::ToString(KT type) {
 		auto const it{range::find(s_KeywordMap, type, &KeywordInfo::Type)};
-		if (it != s_KeywordMap.end()) {
-			return {it->Glyph};
+		return it != s_KeywordMap.end() ? it->Glyph : "";
+	}
+
+	KeywordInfo const& Keyword::Get(KT type) {
+		if (auto const it{range::find(s_KeywordMap, type, &KeywordInfo::Type)};
+			it != s_KeywordMap.end())
+		{
+			return *it;
 		}
-		else return sc_EmptyString;
+		else throw ArCalcException{"Getting invalid keyword [{}]", type};
+	}
+
+	std::vector<KeywordType> Keyword::GetAllKeywordTypes() {
+		static std::vector<KeywordType> res{};
+
+		if (res.empty()) { // Only happens the first time, otherwise the function is constant time.
+			res.reserve(s_KeywordMap.size());
+			std::ranges::transform(s_KeywordMap, std::back_inserter(res), &KeywordInfo::Type);
+		}
+		
+		return res;
 	}
 }

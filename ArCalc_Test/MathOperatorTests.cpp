@@ -34,7 +34,7 @@ MATHOP_TEST(IsUnary_and_IsBinary) {
 
 	for (auto const op : sc_MyOperators) {
 		ASSERT_TRUE(MathOperator::IsValid(op));
-		// All operators by the time of this writing are unary or binary.
+		// All operators m_By the time of this writing are unary or binary.
 		EXPECT_TRUE(MathOperator::IsBinary(op) || MathOperator::IsUnary(op));
 
 		if (MathOperator::IsUnary(op)) {

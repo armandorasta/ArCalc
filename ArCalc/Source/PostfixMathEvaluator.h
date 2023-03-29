@@ -2,20 +2,18 @@
 
 #include "IEvaluator.h"
 #include "ValueStack.h"
+#include "Util/LiteralManager.h"
 #include "Util/FunctionManager.h"
 
 namespace ArCalc {
 	class PostfixMathEvaluator : public IEvaluator {
-	public:
-		using VarMap = std::unordered_map<std::string, double>;
-
 	private:
 		enum class St : std::size_t;
 
 	public:
-		PostfixMathEvaluator(VarMap const& literals, FunctionManager& funMan);
+		PostfixMathEvaluator(LiteralManager& litMan, FunctionManager& funMan);
 
-		double Eval(std::string_view exprString);
+		std::optional<double> Eval(std::string_view exprString);
 		void Reset();
 
 	private:
@@ -38,14 +36,13 @@ namespace ArCalc {
 		std::string const& GetString() const;
 		void ResetString();
 
-		bool IsValidLiteral(std::string const& glyph) const;
-		double Deref(std::string const& glyph) const;
 		bool IsCharValidForIdent(char c);
 		bool IsCharValidForNumber(char c);
 
 		void EvalOperator();
 		void EvalFunction();
-		std::optional<double> CallFunction(std::string_view funcName, std::vector<double> const& args);
+		std::optional<double> CallFunction(std::string_view funcName, 
+			std::vector<double> const& args);
 
 		constexpr void SetLineNumber(size_t toWhat) 
 			{ m_LineNumber = toWhat; }
@@ -56,11 +53,11 @@ namespace ArCalc {
 		std::string m_CurrStringAcc{};
 		St m_CurrState{};
 		
-		VarMap m_Literals{};
 		ValueStack m_Values{};
 		
 		size_t m_LineNumber{};
 
+		LiteralManager& m_LitMan;
 		FunctionManager& m_FunMan;
 	};
 }

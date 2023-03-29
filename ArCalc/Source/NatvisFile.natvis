@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+	<Type Name="ArCalc::ValueStack">
+		<Expand>
+			<ArrayItems>
+				<Size>m_Data.size()</Size>
+				<ValuePointer>m_Data.data()</ValuePointer>
+			</ArrayItems>
+		</Expand>
+	</Type>
+	
+	<Type Name="ArCalc::ValueStack::Entry">
+		<DisplayString Condition="Ptr">{*Ptr} (LValue)</DisplayString>
+		<DisplayString Condition="!Ptr">{Value} (RValue)</DisplayString>
+		<Expand>
+			<Item Name="Value" Condition="!Ptr">Value</Item>
+			<Item Name="Ref" Condition="Ptr">*Ptr</Item>
+		</Expand>
+	</Type>
+</AutoVisualizer>

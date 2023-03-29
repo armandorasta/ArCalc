@@ -3,9 +3,7 @@
 #include "Core.h"
 #include "Exception/ArCalcException.h"
 
-#define ARCALC_MAKE_PUBLIC(_originalSpec, ...) public: __VA_ARGS__ _originalSpec
-
-namespace Util {
+namespace ArCalc::Util {
 	constexpr auto FuncName(std::source_location debugInfo = {}) {
 		return debugInfo.function_name();
 	}
@@ -49,4 +47,6 @@ namespace Util {
 					|| static_cast<bool>(_func1(std::forward<Args>(args)...)); 
 			};
 	}
+
+	bool IsValidIndentifier(std::string_view what);
 }

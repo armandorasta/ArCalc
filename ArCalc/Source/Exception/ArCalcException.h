@@ -7,8 +7,10 @@ namespace ArCalc {
 	public:
 		ArCalcException() : ArCalcException{"No message"} {}
 
-		ArCalcException(std::string_view message) {
-			SetMessage(message);
+		template <class... FormatArgs>
+		ArCalcException(std::string_view message, FormatArgs&&... fmtArgs) {
+			std::vformat_to(std::back_inserter(m_Message), message, 
+				std::make_format_args(std::forward<FormatArgs>(fmtArgs)...));
 		}
 
 	public:
@@ -16,8 +18,11 @@ namespace ArCalc {
 			return std::format("Error ({}): {}", GetLineNumber(), m_Message);
 		}
 
-		constexpr void SetMessage(std::string_view newMessage) {
-			m_Message = newMessage;
+		template <class... FormatArgs>
+		void SetMessage(std::string_view newMessage, FormatArgs&&... fmtArgs) {
+			m_Message.clear();
+			std::vformat_to(std::back_inserter(m_Message), newMessage, 
+				std::make_format_args(std::forward<FormatArgs>(fmtArgs)...));
 		}
 
 		constexpr size_t GetLineNumber() const {
@@ -25,12 +30,12 @@ namespace ArCalc {
 		}
 
 		constexpr bool SetLineNumber(size_t toWhat) {
-			if (bLineNumberSet) { 
-				return false; 
-			} else { 
+			if (!bLineNumberSet) { 
 				m_LineNumber = toWhat; 
 				return true;
-			}
+			} 
+			
+			return false; 
 		}
 
 		constexpr void LockNumberLine() {
@@ -44,37 +49,37 @@ namespace ArCalc {
 	};
 }
 
-#define ARCALC_UNREACHABLE_CODE() \
-	{ \
+#define ARCALC_NOT_POSSIBLE(_alwaysFalse) \
+	assert(!(_alwaysFalse) && "Reached a condition assumed to be impossible")
+
+#define ARCALC_UNREACHABLE_CODE()         \
+	{                                     \
 		assert(!"Should be unreachable"); \
-		std::unreachable(); \
+		std::unreachable();               \
 	}
 
-#define ARCALC_NOT_IMPLEMENTED() \
-	{ \
+#define ARCALC_NOT_IMPLEMENTED()        \
+	{                                   \
 		assert(!"Not implemented yet"); \
-		std::unreachable(); \
+		std::unreachable();             \
 	}
 
 
-/// This macro is the same as ARCALC_ASSERT, except it survives in release builds as well.
+/// This macro is the same as ARCALC_DA, except it survives in release builds as well.
 #define ARCALC_EXPECT(_cond, _message, ...) \
-	if (!(_cond)) throw ::ArCalc::ArCalcException{ \
-		std::vformat(_message, std::make_format_args(__VA_ARGS__)) \
-	}
-
-/// This macro is the same as ARCALC_ERROR, except it survives in release builds as well.
-#define ARCALC_THROW(_type, _message, ...)	\
-	throw ::ArCalc::_type{std::vformat(_message, std::make_format_args(__VA_ARGS__))}
+	if (!(_cond)) throw ::ArCalc::ArCalcException{_message, __VA_ARGS__} \
 
 #ifdef NDEBUG
 
-ARCALC_ASSERT(_cond, _message, ...)
-ARCALC_ERROR(_message, ...)
+#define ARCALC_DA(_cond, _message, ...)
+#define ARCALC_DE(_message, ...)
 
 #else // ^^^^^^ NDEBUG  vvvvvvv !NDEBUG
 
-#define ARCALC_ASSERT(_cond, _message, ...) ARCALC_EXPECT(_cond, _message, __VA_ARGS__)
-#define ARCALC_ERROR(_message, ...)         ARCALC_THROW(ArCalcException, _message, __VA_ARGS__)
+/// ArCalc Debug Assert.
+#define ARCALC_DA(_cond, _message, ...) ARCALC_EXPECT(_cond, _message, __VA_ARGS__)
+
+/// ArCalc Debug Error.
+#define ARCALC_DE(_message, ...)        throw ::ArCalc::ArCalcException{_message, __VA_ARGS__}
 
 #endif // NDEBUG

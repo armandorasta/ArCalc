@@ -51,6 +51,7 @@
     <ClCompile Include="MathOperatorTests.cpp" />
     <ClCompile Include="ParserTests.cpp" />
     <ClCompile Include="PostfixMathEvaluatorTests.cpp" />
+    <ClCompile Include="SerializationTests.cpp" />
     <ClCompile Include="UtilTests.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>

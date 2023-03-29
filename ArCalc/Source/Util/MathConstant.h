@@ -8,7 +8,7 @@ namespace ArCalc {
 		MathConstant() = delete;
 
 	private:
-		static std::unordered_map<std::string, double> const sc_ConstantMap;
+		static std::unordered_map<std::string, double> s_ConstantMap;
 
 	public:
 		static bool IsValid(std::string_view glyph);

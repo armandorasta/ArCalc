@@ -19,31 +19,19 @@ namespace ArCalc {
 		ParsingOperator,
 	};
 
-	PostfixMathEvaluator::PostfixMathEvaluator(VarMap const& literals, FunctionManager& funMan) 
-		: m_Literals{literals}, m_FunMan{funMan}
+	PostfixMathEvaluator::PostfixMathEvaluator(LiteralManager& litMan, FunctionManager& funMan) 
+		: m_LitMan{litMan}, m_FunMan{funMan}
 	{
-		// Validate the input map.
-		for (auto const& [name, _value] : m_Literals) {
-			// First character may not be a number.
-			ARCALC_ASSERT(IsCharValidForIdent(name[0]) && !Str::IsNum(name[0]),
-				"Found Invalid literal name [{}] in literal map (starts with a number)", name);
-
-			for (auto const c : name | view::drop(1U)) {
-				ARCALC_ASSERT(IsCharValidForIdent(c), 
-					"Found Invalid literal name [{}] in literal map", name);
-			}
-		}
-
 		if (!MathOperator::IsInitialized()) {
 			MathOperator::Initialize();
 		}
 	}
 
-	double PostfixMathEvaluator::Eval(std::string_view exprString) {
-		ARCALC_ASSERT(!exprString.empty(), "Evaluating empty expression");
+	std::optional<double> PostfixMathEvaluator::Eval(std::string_view exprString) {
+		ARCALC_DA(!exprString.empty(), "Evaluating empty expression");
 		
 		for (auto const c : exprString) {
-			DoIteration(c); // To allow for recurive behaviour.
+			DoIteration(c); // To allow for recursive behaviour.
 		}
 		DoIteration(' '); // Cut any unfinished tokens.
 
@@ -51,10 +39,10 @@ namespace ArCalc {
 		ARCALC_EXPECT(m_Values.Size() < 2, "Expression was not parsed completely"
 			"; too many values are still on the stack");
 
-		// Should be impossible.
-		ARCALC_ASSERT(m_Values.Size() > 0, "Invalid state at end of expression"
-			"; stack was empty at the end of evaluation");
-		return m_Values.Pop();
+		if (m_Values.IsEmpty()) {
+			return {};
+		} 
+		else return m_Values.Pop().Deref();
 	}
 
 	void PostfixMathEvaluator::Reset() {
@@ -100,18 +88,32 @@ namespace ArCalc {
 		std::string literalName{GetString()};
 		if (MathOperator::IsValid(literalName)) {
 			EvalOperator();
-		} else if (MathConstant::IsValid(literalName)) {
-			m_Values.Push(MathConstant::ValueOf(literalName));
 		} else if (m_FunMan.IsDefined(literalName)) {
 			EvalFunction();
-		} else if (m_Literals.contains(literalName)) {
-			PushLiteralValue();
-		} else if (Keyword::IsValid(literalName) && literalName != "_Last") {
-			// Only valid keyword in this context is _Last
-			ARCALC_ERROR("Found keyword [{}] in invalid context (in the middle of an expression)", 
-				literalName);
-		} 
-		else ARCALC_THROW(ArCalcException, "Used of invalid name [{}]", literalName);
+		} else {
+			// Strip the negative sign for lookup.
+			auto const bMinus{literalName.front() == '-'};
+			literalName = literalName.substr(bMinus ? 1U : 0U);
+			
+			if (m_LitMan.IsVisible(literalName)) {
+				if (bMinus) {
+					// Minus sign turns it into an rvalue.
+					m_Values.PushRValue(*m_LitMan.Get(literalName) * -1.0);
+				} else {
+					m_Values.PushLValue(&m_LitMan.Get(literalName));
+				}
+			} else if (literalName == Keyword::ToString(KeywordType::Last)) {
+				// Is is always treated as an rvalue, the user can not pass it by reference.
+				m_Values.PushRValue(*m_LitMan.Get(literalName) * (bMinus ? -1.0 : 1.0));
+			} else if (MathConstant::IsValid(literalName)) {
+				m_Values.PushRValue(MathConstant::ValueOf(literalName) * (bMinus ? -1.0 : 1.0));
+			} else if (Keyword::IsValid(literalName)) {
+				// Only valid keyword in this context is _Last
+				ARCALC_DE("Found keyword [{}] in invalid context (in the middle of an expression)",
+					literalName);
+			}
+			else throw ArCalcException{"Used of invalid name [{}]", literalName};
+		}
 
 		ResetString();
 		ResetState(c);
@@ -119,42 +121,39 @@ namespace ArCalc {
 
 	void PostfixMathEvaluator::ParseNumber(char c) {
 		// Even something like '5PI' instead of '5 * PI' is not allowed for now.
-		ARCALC_ASSERT(!std::isalpha(c) && c != '_',
-			"Found alphabetic character [{}] while parsing number", c
-		);
+		ARCALC_DA(!std::isalpha(c) && c != '_', "Found alphabetic character [{}] while parsing number",
+			c);
 
-		if (GetState() == St::FoundSingleQuote) {
-			switch (c) {
-			case '.':
-				ARCALC_THROW(ArCalcException,
-					"Found a ' just before a floating point while parsing a number");
-			case '\'':
-				ARCALC_THROW(ArCalcException, "Found two ' in a row while parsing a number");
-			default: // One of the rare reachable ones.
-				SetState(St::ParsingNumber);
-				break; // Advised by K & R them selves.
-			}
+		auto const state{GetState()};
+		ARCALC_NOT_POSSIBLE(!(state == St::ParsingNumber || state == St::FoundSingleQuote));
+
+		if (state == St::FoundSingleQuote) switch (c) {
+		case '.':
+			throw ArCalcException{"Found a ' just before a floating point while parsing a number"};
+		case '\'':
+			throw ArCalcException{ "Found two ' in a row while parsing a number"};
+		default: // One of the rare reachable ones.
+			SetState(St::ParsingNumber);
+			break; // Advised m_By K & R themselves.
 		}
-		else SetState(St::ParsingNumber);
 
 		if (std::isdigit(c)) {
 			AddChar(c);
 		} else if (c == '.') {
 			if (range::distance(GetString() | view::filter(Util::Eq('.'))) > 0U) {
-				ARCALC_THROW(ArCalcException, "Found a number with multiple floating points");
+				throw ArCalcException{"Found a number with multiple floating points"};
 			}
 			AddChar(c);
 		} else if (c == '\'') { // Single quotes are for readability 10000000 => 10'000'000.
 			if (auto const acc{GetString()}; !acc.empty() && acc.back() == '.') {
-				ARCALC_THROW(ArCalcException, 
-					"Found a ' right after a floating point while parsing a number");
+				throw ArCalcException{"Found a ' right after a floating point while parsing a number"};
 			}
 
 			SetState(St::FoundSingleQuote); // To check for some errors later ^^^
 			return; // Ignore it.
 		} else {
 			// Finished parsing, evaluating...
-			m_Values.Push(std::atof(GetString().c_str()));
+			m_Values.PushRValue(std::atof(GetString().c_str()));
 			ResetString();
 			ResetState(c);
 		}
@@ -181,10 +180,11 @@ namespace ArCalc {
 		} else if (std::isdigit(c) || c == '.') {
 			SetState(St::ParsingNumber);
 			ParseNumber(c);
-		} else {
+		} else if (IsCharValidForIdent(c)) {
 			SetState(St::ParsingIdentifier);
 			ParseIdentifier(c);
-		}
+		} 
+		else ARCALC_UNREACHABLE_CODE();
 	}
 
 	void PostfixMathEvaluator::PushLiteralValue() {
@@ -192,10 +192,10 @@ namespace ArCalc {
 
 		auto const bMinusSign{literalName.starts_with('-')};
 		if (bMinusSign) {
-			literalName = literalName.substr(1);
+			m_Values.PushRValue(*m_LitMan.Get(literalName.substr(1)) * -1.0);
+		} else {
+			m_Values.PushLValue(&m_LitMan.Get(literalName));
 		}
-
-		m_Values.Push(Deref(literalName) * (bMinusSign ? -1.0 : 1.0));
 	}
 
 	void PostfixMathEvaluator::SetState(St newState) {
@@ -216,23 +216,13 @@ namespace ArCalc {
 	void PostfixMathEvaluator::AddChar(char c) {
 		m_CurrStringAcc.push_back(c);
 	}
+
 	std::string const& PostfixMathEvaluator::GetString() const {
 		return m_CurrStringAcc;
 	}
 
 	void PostfixMathEvaluator::ResetString() {
 		m_CurrStringAcc.clear();
-	}
-
-	bool PostfixMathEvaluator::IsValidLiteral(std::string const& glyph) const {
-		return m_Literals.contains(glyph);
-	}
-
-	double PostfixMathEvaluator::Deref(std::string const& glyph) const {
-		if (auto const it{m_Literals.find(glyph)}; it != m_Literals.end()) {
-			return it->second;
-		}
-		else ARCALC_ERROR("Use of undefined literal [{}]", glyph);
 	}
 
 	void PostfixMathEvaluator::EvalOperator() {
@@ -242,42 +232,58 @@ namespace ArCalc {
 		if (MathOperator::IsBinary(glyph)) {
 			ARCALC_EXPECT(m_Values.Size() > 0, "Found binary operator [{}] with no operands", glyph);
 			ARCALC_EXPECT(m_Values.Size() > 1, "Found binary operator [{}] with 1 operand with value [{}]",
-				glyph, m_Values.Top());
+				glyph, m_Values.Top().Deref());
 
-			auto const rhs{m_Values.Pop()};
-			auto const lhs{m_Values.Top()};
-			m_Values.Top() = MathOperator::EvalBinary(glyph, lhs, rhs);
+			auto const rhs{m_Values.Pop().Deref()};
+			auto const lhs{m_Values.Pop().Deref()}; 
+			// Must pop here ^^^ because, lhs might be an lvalue, and the expression result 
+			// must be an rvalue.
+			m_Values.PushRValue(MathOperator::EvalBinary(glyph, lhs, rhs));
 		} else {
 			ARCALC_EXPECT(m_Values.Size() > 0, "Found unary operator [{}] with no operands", glyph);
-			auto const operand{m_Values.Top()};
-			m_Values.Top() = MathOperator::EvalUnary(glyph, operand);
+			auto const operand{m_Values.Pop().Deref()};
+			// Must pop here ^^^, explained in the other branch.
+			m_Values.PushRValue(MathOperator::EvalUnary(glyph, operand));
 		}
 	}
 
 	void PostfixMathEvaluator::EvalFunction() {
 		auto const funcName{GetString()};
-		std::vector<double> args{};
-		auto const func{m_FunMan.Get(funcName)};
-		auto const paramCount{func.Params.size()};
-		if (m_Values.Size() >= paramCount) {
-			args.resize(paramCount);
-			for (size_t i : view::iota(0U, paramCount) | view::reverse) {
-				args[i] = m_Values.Pop();
+		auto& func{m_FunMan.Get(funcName)};
+
+		if (auto& params{func.Params}; m_Values.Size() >= params.size()) {
+			for (auto const i : view::iota(0U, params.size()) | view::reverse) {
+				auto& param{params[i]};
+				if (param.IsPassedByRef()) {
+					auto const top{m_Values.Pop()};
+					ARCALC_EXPECT(top.bLValue, "Passing rvalue [{}] by reference", top.Deref());
+					param.SetRef(top.Ptr);
+				} else {
+					param.PushValue(m_Values.Pop().Deref());
+				}
 			}
 		} else {
-			// the Function is class is responsible for handling the case where the number of values on the stack 
-			// are less than the number of arguments required.
-			args.resize(m_Values.Size());
+			throw ArCalcException{
+				"Function [{}] Expects [{}] arguments, but only [{}] are available in the stack",
+				funcName, params.size(), m_Values.Size()
+			};
 		}
 
 		try {
-			if (auto const returnValue{m_FunMan.CallFunction(funcName, args)}; returnValue) {
-				m_Values.Push(*returnValue);
+			if (auto const returnValue{m_FunMan.CallFunction(funcName)}; returnValue.has_value()) {
+				m_Values.PushRValue(*returnValue);
 			}
 		} catch (ArCalcException& err) {
 			err.SetLineNumber(err.GetLineNumber() + func.HeaderLineNumber);
-			err.LockNumberLine();
+
+			// So if we are deep in the stack, the functions above do not modify
+			// the line number to the line where the call of this function occurred.
+			err.LockNumberLine(); 
 			throw;
+		}
+
+		for (auto& param : func.Params | view::filter([](auto& p) { return !p.IsPassedByRef(); })) {
+			param.ClearValues();
 		}
 	}
 
@@ -286,6 +292,6 @@ namespace ArCalc {
 	}
 
 	bool PostfixMathEvaluator::IsCharValidForNumber(char c) {
-		return Str::IsNum(c) || c == '\'' || c == '.';
+		return Str::IsDigit(c) || c == '\'' || c == '.';
 	}
 }

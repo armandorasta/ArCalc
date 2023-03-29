@@ -141,6 +141,7 @@
   <ItemGroup>
     <ClCompile Include="Source\App.cpp" />
     <ClCompile Include="Source\ArCalc.cpp" />
+    <ClCompile Include="Source\Util\LiteralManager.cpp" />
     <ClCompile Include="Source\Util\FunctionManager.cpp" />
     <ClCompile Include="Source\Util\IO.cpp" />
     <ClCompile Include="Source\Util\Keyword.cpp" />
@@ -149,10 +150,13 @@
     <ClCompile Include="Source\Parser.cpp" />
     <ClCompile Include="Source\PostfixMathEvaluator.cpp" />
     <ClCompile Include="Source\Util\Random.cpp" />
+    <ClCompile Include="Source\Util\Ser.cpp" />
     <ClCompile Include="Source\Util\Str.cpp" />
+    <ClCompile Include="Source\Util\Util.cpp" />
     <ClCompile Include="Source\ValueStack.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Util\LiteralManager.h" />
     <ClInclude Include="Source\App.h" />
     <ClInclude Include="Source\Exception\ArCalcException.h" />
     <ClInclude Include="Source\Core.h" />
@@ -166,6 +170,7 @@
     <ClInclude Include="Source\Parser.h" />
     <ClInclude Include="Source\PostfixMathEvaluator.h" />
     <ClInclude Include="Source\Util\Random.h" />
+    <ClInclude Include="Source\Util\Ser.h" />
     <ClInclude Include="Source\Util\Str.h" />
     <ClInclude Include="Source\Util\Util.h" />
     <ClInclude Include="Source\ValueStack.h" />
@@ -173,6 +178,9 @@
   <ItemGroup>
     <Text Include="Program.txt" />
     <Text Include="Result.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="Source\NatvisFile.natvis" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

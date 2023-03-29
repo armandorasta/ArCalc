@@ -3,9 +3,9 @@
 namespace ArCalc {
 	enum class KeywordType {
 		/*
-			_Set [Name] [Value]
+			_Set [Name] [Make]
 
-			Assigns or initializes a variable with name[Name] and value[Value]
+			Assigns or initializes a variable with name[Name] and value[Make]
 		*/
 		Set,
 
@@ -24,8 +24,8 @@ namespace ArCalc {
 			The defination ends with a semicolon
 
 			[Params...] {
-				Can be passed by value or by reference by prefixing the name
-				of the parameter by the & operator.
+				Can be passed m_By value or m_By reference m_By prefixing the name
+				of the parameter m_By the & operator.
 			}
 		*/
 		Func,
@@ -52,5 +52,20 @@ namespace ArCalc {
 		If,
 		Else,
 		Elif,
+
+		/*
+			_Save [constant or function name] [category]
+
+			Serializes a constant or a function to disc, so it is ready to use in 
+			the next session.
+		*/
+		Save,
+
+		/*
+			_Load [category]
+
+			Loads an already serialized set of values from disc.
+		*/
+		Load,
 	};
 }

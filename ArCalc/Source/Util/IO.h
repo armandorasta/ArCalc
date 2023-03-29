@@ -6,19 +6,19 @@ namespace ArCalc::IO {
 	std::string GetLine(std::istream& is);
 	std::string GetLineStd();
 
-	constexpr auto FuncName(std::source_location debugInfo = {}) {
+	[[nodiscard]] constexpr auto FuncName(std::source_location debugInfo = {}) {
 		return debugInfo.function_name();
 	}
 
 	template<std::default_initializable ValueType>
-	ValueType Input(std::istream& is) {
+	[[nodiscard]] ValueType Input(std::istream& is) {
 		ValueType value{ };
 		is >> value;
 		return value;
 	}
 
 	template<std::default_initializable ValueType>
-	auto InputStd() {
+	[[nodiscard]] auto InputStd() {
 		return Input<ValueType>(std::cin);
 	}
 
@@ -28,7 +28,7 @@ namespace ArCalc::IO {
 	}
 
 	template <class ValueType>
-	auto InputStd(ValueType* pOutValue) requires requires { Input(std::cin, pOutValue); } {
+	void InputStd(ValueType* pOutValue) requires requires { Input(std::cin, pOutValue); } {
 		return Input(std::cin, pOutValue);
 	}
 
@@ -61,8 +61,8 @@ namespace ArCalc::IO {
 		return Print(std::cout, formatString, std::forward<FormatArgs>(fmtArgs)...);
 	}
 
-	std::string FileToString(fs::path const& filePath, bool bKeepTrailingNulls = false);
-	size_t IStreamSize(std::istream& is);
+	[[nodiscard]] std::string FileToString(fs::path const& filePath, bool bKeepTrailingNulls = false);
+	[[nodiscard]] size_t IStreamSize(std::istream& is);
 
 	template <std::default_initializable ByteContainer> requires requires 
 		(ByteContainer& con) {
@@ -70,7 +70,7 @@ namespace ArCalc::IO {
 			{ con.size() } -> std::same_as<size_t>;
 			con.resize(std::declval<size_t>());
 		}
-	ByteContainer IStreamToContainer(std::istream& is, bool bKeepTrailingNulls) {
+	[[nodiscard]] ByteContainer IStreamToContainer(std::istream& is, bool bKeepTrailingNulls) {
 		ByteContainer bytes{};
 
 		if (auto const streamSize{IStreamSize(is)}; streamSize) { 
@@ -92,5 +92,5 @@ namespace ArCalc::IO {
 		return bytes;
 	}
 
-	std::string IStreamToString(std::istream& is, bool bKeepTrailingNulls = false);
+	[[nodiscard]] std::string IStreamToString(std::istream& is, bool bKeepTrailingNulls = false);
 }

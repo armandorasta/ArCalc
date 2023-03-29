@@ -3,6 +3,43 @@
 #include "Core.h"
 #include "Util/Keyword.h"
 #include "Util/FunctionManager.h"
+#include "Util/LiteralManager.h"
+
+/* Minimum amount of features to start working on the console interface:
+	* Variables (done) {
+		* Global variables, which are only usable in the global scope.
+		* Local variables, which are only usable in their respective scope.
+	}
+	
+	* Functions {
+		* Passing m_By value. (done)
+		* Passing m_By reference. (done)
+		* Branching (done) {
+			* If.
+			* Else.
+			* Elif chaining.
+		}
+		* Return and not return a value. (done)
+		* Handling end of function better. (optional)
+	}
+
+	* Serialization {
+		* Built in functions. (done)
+		* Built in constants. (done)
+		* Some of the user functions {
+			* They should be sortable each in their own category.
+			* They must not need to be loaded all at once.
+		}
+	}
+
+	* Niche {
+		* Making the window always on top.
+		* Changing the color of the console.
+		* Syntax highlighting in the console.
+		* Better error messages.
+		* Make it faster.
+	}
+*/
 
 namespace ArCalc {
 	/*
@@ -80,7 +117,7 @@ namespace ArCalc {
 		auto operator=(Parser&&)      = delete;
 
 		Parser(std::ostream& os);
-		Parser(std::ostream& os, std::vector<ParamData> const& paramData, bool bValidation);
+		Parser(std::ostream& os, std::vector<ParamData>& paramData, bool bValidation);
 
 		static void ParseFile(fs::path const& filePath);
 		static void ParseFile(fs::path const& filePath, fs::path const& outFilePath);
@@ -88,33 +125,30 @@ namespace ArCalc {
 		static void ParseIStream(std::istream& is, std::ostream& resultOStream);
 		
 		void ParseLine(std::string_view line);
-		void ListVarNames(std::string_view prefix);
 
 		void SetOStream(std::ostream& toWhat);
 		std::ostream& GetOStream();
 
-		bool IsVisible(std::string_view varName) const;
-		double Deref(std::string_view varName) const;
-		double GetLast() const;
-
-		bool IsFunction(std::string_view funcName) const;
-		constexpr bool IsExecutingFunction() const 
+		constexpr auto IsExecutingFunction() const 
 			{ return m_bInFunction; }
 		bool IsParsingFunction() const;
 		
-		constexpr size_t GetLineNumber() const 
+		constexpr auto GetLineNumber() const 
 			{ return m_LineNumber; }
-		constexpr bool IsLineEndsWithSemiColon() const 
+		constexpr auto IsLineEndsWithSemiColon() const 
 			{ return m_bSemiColon; }
 
-		double GetReturnValue();
+		std::optional<double> GetReturnValue(FuncReturnType retype);
+
+		LiteralManager const& GetLitMan() const
+			{ return m_LitMan; }
+		FunctionManager const& GetFunMan() const 
+			{ return m_FunMan; }
 
 	private:
 		void HandleFirstToken();
-		void SetVar(std::string_view name, double value);
-		double GetVar(std::string_view name) const;
-		double Eval(std::string_view exprString);
-		constexpr void IncrementLineNumber(size_t inc = 1U) 
+		std::optional<double> Eval(std::string_view exprString);
+		constexpr auto IncrementLineNumber(size_t inc = 1U) 
 			{ m_LineNumber += inc; }
 		
 		void HandleSetKeyword();
@@ -129,25 +163,31 @@ namespace ArCalc {
 		void HandleConditionalBody(bool bExecute);
 		ConditionAndStatement ParseConditionalHeader(std::string_view header);
 
-		void AssertKeyword(std::string_view glyph, KeywordType what);
-		void AssertIdentifier(std::string_view what);
+		void HandleSaveKeyword();
+		void HandleLoadKeyword();
+
+		void ExpectKeyword(std::string_view glyph, KeywordType what);
+		void KeywordDebugDoubleCheck(std::string_view glyph, KeywordType what);
+		void ExpectIdentifier(std::string_view what);
 
 		constexpr void SetState(St newState) 
 			{ m_CurrState = newState; }
-		constexpr St GetState() const 
+		constexpr auto GetState() const 
 			{ return m_CurrState; }
+
+		void Reset();
 		
 	private:
 		FunctionManager m_FunMan;
+		LiteralManager m_LitMan;
 
 		std::string_view m_CurrentLine{};
-		std::unordered_map<std::string, double> m_VarMap{};
 		St m_CurrState;
 		size_t m_LineNumber{};
 
 		bool m_bSemiColon{};
 		bool m_bInFunction{};
-		bool m_bConditionalBlockExecuted{};
+		bool m_bSelectionBlockExecuted{};
 
 		std::optional<bool> m_bConditionRegister{};
 		std::optional<double> m_ReturnValueRegister{};

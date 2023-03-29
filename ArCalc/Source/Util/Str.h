@@ -5,8 +5,30 @@
 #include "Util.h"
 
 namespace ArCalc::Str {
+	constexpr bool IsWhiteSpace(char c) {
+		return c == ' ' || c == '\t' || c == '\n';
+	}
+
+	constexpr bool IsNotWhiteSpace(char c) {
+		return !IsWhiteSpace(c);
+	}
+
+	constexpr bool IsAlpha(char c) {
+		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z';
+	}
+
+	constexpr bool IsDigit(char c) {
+		return c >= '0' && c <= '9';
+	}
+
+	constexpr bool IsAlNum(char c) {
+		return IsAlpha(c) || IsDigit(c);
+	}
+
 	template <std::constructible_from<std::string_view> TReturn = std::string>
-	constexpr std::vector<TReturn> SplitOn(std::string_view str, std::string_view chars, bool bChain = true) {
+	constexpr std::vector<TReturn> SplitOn(std::string_view str, std::string_view chars, 
+		bool bChain = true) 
+	{
 		if (str.empty()) { // Get rid of this edge case quickly.
 			return {TReturn{""}};
 		}
@@ -39,7 +61,7 @@ namespace ArCalc::Str {
 
 	template <std::constructible_from<std::string_view> TReturn = std::string>
 	constexpr std::vector<TReturn> SplitOnSpaces(std::string_view str) {
-		return SplitOn(str, " \t");
+		return SplitOn<TReturn>(str, " \t");
 	}
 
 	namespace Secret {
@@ -79,11 +101,8 @@ namespace ArCalc::Str {
 
 	template <std::constructible_from<std::string_view> TReturn = std::string>
 	TReturn TrimRight(std::string_view str) {
-		return TReturn{str.substr(0, str.size() - range::distance(
-			str
-			| view::reverse
-			| view::take_while([](auto c) { return std::isspace(c); })
-		))};
+		auto const trailingSpaces{str | view::reverse | view::take_while(IsWhiteSpace)};
+		return TReturn{str.substr(0, str.size() - range::distance(trailingSpaces))};
 	}
 
 	template <std::constructible_from<std::string_view> TReturn = std::string>
@@ -106,47 +125,32 @@ namespace ArCalc::Str {
 					std::atoi(mangledName.substr(index + 2, mangledName.size() - 2).data())
 				)}
 			};
-		} 
-		else ARCALC_ERROR("Demangling invalidly mangled name [{}]", mangledName);
-	}
+		} else {
+			// This should never happen in release.
+			ARCALC_DE("Demangling invalidly mangled name [{}]", mangledName);
 
-	constexpr bool IsWhiteSpace(char c) {
-		switch (c) {
-		case ' ':
-		case '\t':
-			return true;
-		default:
-			return false;
+#ifdef NDEBUG
+			return {};
+#endif // ^^^^ Release mode only.
 		}
-	}
 
-	constexpr bool IsNotWhiteSpace(char c) {
-		return !IsWhiteSpace(c);
-	}
-
-	constexpr bool IsAlpha(char c) {
-		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z';
-	}
-
-	constexpr bool IsNum(char c) {
-		return c >= '0' && c <= '9';
-	}
-
-	constexpr bool IsAlNum(char c) {
-		return IsAlpha(c) || IsNum(c);
 	}
 
 	template <class ValueType> requires std::is_arithmetic_v<ValueType>
 	constexpr ValueType FromString(std::string_view str) {
 		if (auto const leftIndex{str.find_first_not_of(" \t")}; leftIndex != std::string_view::npos) {
-			str = str.substr(leftIndex, str.find_first_of(" \t", leftIndex));
+			//                                       v  ^ those spaces are important
+			auto const rightIndex{str.find_first_of(" \t", leftIndex)};
+			str = str.substr(leftIndex, rightIndex);
 		}
 
 		ValueType resNum{};
 		auto const res{std::from_chars(str.data(), str.data() + str.size(), resNum)};
 		if (auto const [ptr, code] {res}; code != std::errc{}) {
-			ARCALC_THROW(ArCalcException, "Invalid Argument, found invalid character [{}] at index [{}]",
-				*ptr, ptr - str.data());
+			throw ArCalcException{
+				"Invalid Argument; found invalid character [{}] at index [{}]",
+				*ptr, ptr - str.data()
+			};
 		} 
 
 		return resNum;
@@ -166,7 +170,7 @@ namespace ArCalc::Str {
 			
 			std::make_signed_t<size_t> res{};
 			for (auto const c : numberRange | view::drop(1)) {
-				ARCALC_EXPECT(IsNum(c), "Found a non-numeric character [{}]", c);
+				ARCALC_EXPECT(IsDigit(c), "Found a non-numeric character [{}]", c);
 				res = 10 * res + (c - '0');
 			}
 			
@@ -175,7 +179,7 @@ namespace ArCalc::Str {
 			
 		size_t res{};
 		for (auto const c : numberRange) {
-			ARCALC_EXPECT(IsNum(c), "Found a non-numeric character [{}]", c);
+			ARCALC_EXPECT(IsDigit(c), "Found a non-numeric character [{}]", c);
 			res = 10 * res + (c - '0');
 		}
 			
@@ -185,8 +189,8 @@ namespace ArCalc::Str {
 	template <std::integral IntType>
 	constexpr std::optional<IntType> StringToIntOpt(std::string_view str) {
 		// Can't be done the other way around.
-		// This function must be implemented in terms of the StringToInt because, 
-		// this version is not tested and that one is.
+		// This function must be implemented in terms of the StringToInt because this version is not 
+		// tested and that one is.
 		try { return {StringToInt<IntType>(str)}; }
 		catch (ArCalcException&) { return {}; }
 	}

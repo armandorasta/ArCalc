@@ -13,6 +13,12 @@ class PostfixMathEvaluatorTests : public testing::Test {
 private:
 	inline static std::stringstream s_BullshitSS{};
 	inline static FunctionManager s_FunMan{s_BullshitSS};
+
+public:
+	static std::stringstream& GetStringStream() {
+		return s_BullshitSS;
+	}
+
 public:
 	void SetUp() override {
 		if (!MathOperator::IsInitialized()) {
@@ -20,17 +26,27 @@ public:
 		}
 	}
 
-	static PostfixMathEvaluator GenerateTestingInstance(PostfixMathEvaluator::VarMap const& literals) {
-		return PostfixMathEvaluator{literals, s_FunMan};
+	static LiteralManager LitManFromLits(std::unordered_map<std::string_view, double>&& lits) {
+		LiteralManager litMan{GetStringStream()};
+		for (auto const& [name, value] : lits) {
+			litMan.Add(name, value);
+		}
+
+		return litMan;
+	}
+
+	static PostfixMathEvaluator GenerateTestingInstance(LiteralManager& litMan) {
+		return PostfixMathEvaluator{litMan, s_FunMan};
 	}
 };
 
 EVALUATOR_TEST(Number_parsing) {
-	auto ev{GenerateTestingInstance({})};
+	auto litMan{LitManFromLits({})};
+	auto ev{GenerateTestingInstance(litMan)};
 	
 	auto const testBothSigns = [&](double value, std::string expr) {
-		ASSERT_DOUBLE_EQ(value, ev.Eval(expr));
-		ASSERT_DOUBLE_EQ(-value, ev.Eval("-" + expr));
+		ASSERT_DOUBLE_EQ(value, *ev.Eval(expr));
+		ASSERT_DOUBLE_EQ(-value, *ev.Eval("-" + expr));
 	};
 
 	testBothSigns(5.0, "5");
@@ -89,23 +105,23 @@ EVALUATOR_TEST(Identifier_parsing) {
 		"some1", "so1me", // Numbers
 	};
 
-	PostfixMathEvaluator::VarMap lits{};
+	LiteralManager litMan{GetStringStream()};
 	for (auto const n : view::iota(0U, std::size(Names))) {
-		lits.emplace(Names[n], n * 1.0);
+		litMan.Add(Names[n], n * 1.0);
 	}
 
-	auto ev{GenerateTestingInstance(lits)};
-
+	auto ev{GenerateTestingInstance(litMan)};
 	for (auto const name : Names) {
-		ASSERT_DOUBLE_EQ(lits.at(name), ev.Eval(name));
+		ASSERT_DOUBLE_EQ(*litMan.Get(name), *ev.Eval(name));
 	}
 }
 
 EVALUATOR_TEST(Math_constant_parsing) {
-	auto ev{GenerateTestingInstance({})};
+	auto litMan{LitManFromLits({})};
+	auto ev{GenerateTestingInstance(litMan)};
 
-	ASSERT_DOUBLE_EQ(std::numbers::pi, ev.Eval("pi"));
-	ASSERT_DOUBLE_EQ(-(2 * std::numbers::pi), ev.Eval("pi 2 * negate"));
+	ASSERT_DOUBLE_EQ(std::numbers::pi, *ev.Eval("pi"));
+	ASSERT_DOUBLE_EQ(-(2 * std::numbers::pi), *ev.Eval("pi 2 * negate"));
 }
 
 EVALUATOR_TEST(Three_operands) {
@@ -113,17 +129,16 @@ EVALUATOR_TEST(Three_operands) {
 	constexpr auto B{-5.0};
 	constexpr auto C{10.0};
 
-	auto ev{GenerateTestingInstance({
-		{"a", A}, {"b", B}, {"c", C},
-	})};
+	auto litMan{LitManFromLits({{"a", A}, {"b", B}, {"c", C}})};
+	auto ev{GenerateTestingInstance(litMan)};
 
-	ASSERT_DOUBLE_EQ(A + B + C, ev.Eval("a b c + +"));
-	ASSERT_DOUBLE_EQ(A + B + C, ev.Eval("a b + c +"));
-	ASSERT_DOUBLE_EQ(A * B + C, ev.Eval("a b * c +"));
-	ASSERT_DOUBLE_EQ(A + B * C, ev.Eval("b c * a +"));
+	ASSERT_DOUBLE_EQ(A + B + C, *ev.Eval("a b c + +"));
+	ASSERT_DOUBLE_EQ(A + B + C, *ev.Eval("a b + c +"));
+	ASSERT_DOUBLE_EQ(A * B + C, *ev.Eval("a b * c +"));
+	ASSERT_DOUBLE_EQ(A + B * C, *ev.Eval("b c * a +"));
 
-	ASSERT_DOUBLE_EQ((A + B) * C, ev.Eval("a b + c *"));
-	ASSERT_DOUBLE_EQ(C * (A + B), ev.Eval("c a b + *"));
+	ASSERT_DOUBLE_EQ((A + B) * C, *ev.Eval("a b + c *"));
+	ASSERT_DOUBLE_EQ(C * (A + B), *ev.Eval("c a b + *"));
 }
 
 EVALUATOR_TEST(Unary_operators) {
@@ -131,12 +146,14 @@ EVALUATOR_TEST(Unary_operators) {
 	constexpr auto B{-5.0};
 	constexpr auto C{10.0};
 
-	auto ev{GenerateTestingInstance({{"a", A}, {"b", B}, {"c", C}})};
-	ASSERT_DOUBLE_EQ(-A, ev.Eval("a negate"));
-	ASSERT_DOUBLE_EQ(std::abs(A + B), ev.Eval("a b + abs"));
-	ASSERT_DOUBLE_EQ(std::sqrt(std::abs(A + B)), ev.Eval("a b + abs sqrt"));
-	ASSERT_DOUBLE_EQ(std::abs(A + B * C), ev.Eval("a b c * + abs"));
-	ASSERT_DOUBLE_EQ(std::abs(A + B) * C, ev.Eval("a b + abs c *"));
-	ASSERT_DOUBLE_EQ(std::sqrt(std::abs(A + B * C)), ev.Eval("a b c * + abs sqrt"));
-	ASSERT_DOUBLE_EQ(std::sqrt(A*A + B*B + C*C), ev.Eval("a a * b b * c c * + + sqrt"));
+	auto litMan{LitManFromLits({{"a", A}, {"b", B}, {"c", C}})};
+	auto ev{GenerateTestingInstance(litMan)};
+
+	ASSERT_DOUBLE_EQ(-A, *ev.Eval("a negate"));
+	ASSERT_DOUBLE_EQ(std::abs(A + B), *ev.Eval("a b + abs"));
+	ASSERT_DOUBLE_EQ(std::sqrt(std::abs(A + B)), *ev.Eval("a b + abs sqrt"));
+	ASSERT_DOUBLE_EQ(std::abs(A + B * C), *ev.Eval("a b c * + abs"));
+	ASSERT_DOUBLE_EQ(std::abs(A + B) * C, *ev.Eval("a b + abs c *"));
+	ASSERT_DOUBLE_EQ(std::sqrt(std::abs(A + B * C)), *ev.Eval("a b c * + abs sqrt"));
+	ASSERT_DOUBLE_EQ(std::sqrt(A*A + B*B + C*C), *ev.Eval("a a * b b * c c * + + sqrt"));
 }

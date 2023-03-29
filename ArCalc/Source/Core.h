@@ -1,5 +1,6 @@
 #pragma once
 
+#include <expected>
 #include <vector>
 #include <cassert>
 #include <map>
