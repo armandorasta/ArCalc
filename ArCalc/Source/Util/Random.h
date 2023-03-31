@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core.h"
+#include "Exception/ArCalcException.h"
 
 namespace ArCalc::Random {
 	namespace Secret {
@@ -11,8 +12,8 @@ namespace ArCalc::Random {
 	constexpr std::mt19937& Engine() { return Secret::s_Rng; }
 
 #define ARCALC_DECLARE_RANDOM_INT_FUNC(_funcName, _type) \
-	_type _funcName(); \
-	_type _funcName(_type max); \
+	_type _funcName();                                   \
+	_type _funcName(_type max);                          \
 	_type _funcName(_type min, _type max)
 
 	ARCALC_DECLARE_RANDOM_INT_FUNC(Bool, bool);
@@ -27,13 +28,14 @@ namespace ArCalc::Random {
 
 	template <class ValueType> requires std::is_arithmetic_v<ValueType>
 	ValueType Generic(ValueType min, ValueType max) {
-		assert(min <= max && "Tried to generate a random number with the range reversed");
+		ARCALC_DA(min <= max, "Tried to generate a random number with the range reversed");
 		if constexpr (std::is_same_v<ValueType, bool>) {
 			return std::bernoulli_distribution{}(Secret::s_Rng);
 		} else if constexpr (std::is_integral_v<ValueType>) {
 			return std::uniform_int_distribution{min, max}(Secret::s_Rng);
-		} 
-		else return std::uniform_real_distribution{min, max}(Secret::s_Rng);
+		} else {
+			return std::uniform_real_distribution{min, max}(Secret::s_Rng);
+		}
 	}
 
 	template <class ValueType> requires std::is_arithmetic_v<ValueType>

@@ -10,6 +10,14 @@ namespace ArCalc {
 		UnaryOrBinary = Unary | Binary,
 	};
 
+	MathOperator const MathOperator::s_InitializationInstance{};
+
+	MathOperator::MathOperator() {
+		if (!IsInitialized()) {
+			Initialize();
+		}
+	}
+
 	bool MathOperator::IsInitialized() {
 		return !s_Operators.empty();
 	}
@@ -35,14 +43,22 @@ namespace ArCalc {
 	}
 
 	double MathOperator::EvalBinary(std::string_view op, double lhs, double rhs) {
-		ARCALC_EXPECT(IsValid(op), "[EvalBinary] Invalid operator: {}", op);
-		ARCALC_EXPECT(IsBinary(op), "Evaluating non-binary operator [{}] using EvalBinary", op);
+		if (!IsValid(op)) {
+			throw ExprEvalError{"[EvalBinary] Invalid operator: {}", op};
+		} else if (!IsBinary(op)) {
+			throw ExprEvalError{"Evaluating non-binary operator [{}] using EvalBinary", op};
+		}
+		
 		return s_Operators.at(std::string{op}).Func({lhs, rhs});
 	}
 
 	double MathOperator::EvalUnary(std::string_view op, double operand) {
-		ARCALC_EXPECT(IsValid(op), "[EvalUnary] Invalid operator: {}", op);
-		ARCALC_EXPECT(IsUnary(op), "Evaluating non-unary [{}] operator using EvalUnary", op);
+		if (!IsValid(op)) {
+			throw ExprEvalError{"[EvalUnary] Invalid operator: {}", op};
+		} else if (!IsUnary(op)) {
+			throw ExprEvalError{"Evaluating non-unary [{}] operator using EvalUnary", op};
+		} 
+		
 		return s_Operators.at(std::string{op}).Func({operand});
 	}
 
@@ -96,8 +112,11 @@ namespace ArCalc {
 		AddUnaryOperator("floor",  [](auto o) { return std::floor(o); });
 		AddUnaryOperator("ceil",   [](auto o) { return std::ceil(o); });
 		AddUnaryOperator("round",  [](auto o) { return std::round(o); });
-		AddUnaryOperator("sqrt",   [](auto o) { return std::sqrt(o); });
 		AddUnaryOperator("sign",   [](auto o) { return (o > 0.0) ? +1.0 : (o < 0.0) ? -1.0 : 0.0; });
+		AddUnaryOperator("sqrt",   [](auto o) { 
+			if (o >= 0.0) { return std::sqrt(o); }
+			else          { throw MathError{"Square root of negative number [{}]", o}; };
+		});
 		// Probability
 		AddUnaryOperator("!",      [](auto o) { return FloatFactorio(o); });
 		AddUnaryOperator("!!",     [](auto o) { return o == 0.0; });
@@ -109,29 +128,38 @@ namespace ArCalc {
 		});
 		// Exponential
 		AddBinaryOperator("^",    [](auto l, auto r) { return std::pow(l, r); });
-		AddUnaryOperator("ln",    [](auto o) { return std::log(o); });
-		AddUnaryOperator("log2",  [](auto o) { return std::log2(o); });
-		AddUnaryOperator("log10", [](auto o) { return std::log10(o); });
 		AddUnaryOperator("exp",   [](auto o) { return std::pow(std::numbers::e, o); });
+		AddUnaryOperator("ln", [](auto o) {
+			if (o >= 0.0) { return std::log(o); }
+			else          { throw MathError{"ln of nagative number [{}]", o}; }
+		});
+		AddUnaryOperator("log2",  [](auto o) {
+			if (o >= 0.0) { return std::log2(o); }
+			else          { throw MathError{"log2 of nagative number [{}]", o}; }
+		});
+		AddUnaryOperator("log10", [](auto o) {
+			if (o >= 0.0) { return std::log10(o); }
+			else          { throw MathError{"log10 of nagative number [{}]", o}; } 
+		});
 	}
 
 	void MathOperator::AddTrigOperators() {
-#define ADD_TRIG_FUNC_BASE(_glyph, _operation) \
+#define ADD_TRIG_FUNC_BASE(_glyph, _operation)          \
 	AddOperator(#_glyph, OT::Unary, [](auto operands) { \
-		return _operation; \
+		return _operation;                              \
 	})
 
 #define ADD_TRIG_FUNC_SHORT(_reg) \
 	ADD_TRIG_FUNC_BASE(_reg, std::_reg(operands[0]))
 
-#define ADD_TRIG_FUNC_REG_REV(_reg, _rev) \
-	ADD_TRIG_FUNC_SHORT(_reg); \
+#define ADD_TRIG_FUNC_REG_REV(_reg, _rev)                  \
+	ADD_TRIG_FUNC_SHORT(_reg);                             \
 	ADD_TRIG_FUNC_BASE(_rev, 1.0 / std::_reg(operands[0]))
 
-#define ADD_TRIG_FUNC(_reg, _rev) \
-	ADD_TRIG_FUNC_REG_REV(_reg, _rev); \
+#define ADD_TRIG_FUNC(_reg, _rev)                \
+	ADD_TRIG_FUNC_REG_REV(_reg, _rev);           \
 	ADD_TRIG_FUNC_REG_REV(_reg ## h, _rev ## h); \
-	ADD_TRIG_FUNC_SHORT(a ## _reg); \
+	ADD_TRIG_FUNC_SHORT(a ## _reg);              \
 	ADD_TRIG_FUNC_SHORT(a ## _reg ## h)
 
 		ADD_TRIG_FUNC(sin, csc);
@@ -145,6 +173,12 @@ namespace ArCalc {
 	}
 
 	double MathOperator::FloatFactorio(double n) {
+		if (n < 0.0) {
+			throw MathError{"Factorio of negative number [{}]", n};
+		} else if (std::fmod(n, 1.0) > 0.000001) {
+			throw MathError{"Factorio of number has digits after floating point [{}]", n};
+		} 
+
 		auto res{static_cast<size_t>(n)};
 		for (size_t i : view::iota(1U, res)) {
 			res *= i;

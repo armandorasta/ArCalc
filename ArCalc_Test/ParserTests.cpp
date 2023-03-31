@@ -4,7 +4,8 @@
 #include "Util/Str.h"
 #include <Util/IO.h>
 #include <Util/Random.h>
-#include <Util/Ser.h>
+
+#include "TestingHelperMacros.h"
 
 #define PARSER_TEST(_testName) TEST_F(ParserTests, _testName)
 
@@ -501,24 +502,25 @@ PARSER_TEST(Serializing_a_constant) {
 	optPar->ParseLine("_Set fourThirteen 413");
 	optPar->ParseLine("_Set tenEighty 1080");
 	// Saving...
-	ASSERT_NO_THROW(optPar->ParseLine("_Save fourThirteen Testing")) << "Threw while saving.";
-	ASSERT_NO_THROW(optPar->ParseLine("_Save tenEighty Testing")) << "Threw while saving.";
+	EXPECT_NO_THROW(optPar->ParseLine("_Save fourThirteen Testing")) << "Threw while saving.";
+	EXPECT_NO_THROW(optPar->ParseLine("_Save tenEighty Testing")) << "Threw while saving.";
 
 	// Restarting...
 	optPar.emplace(GenerateTestingInstance());
 
 	// Loading...
-	ASSERT_NO_THROW(optPar->ParseLine("_Load Testing")) << "Threw while loading.";
+	EXPECT_NO_THROW(optPar->ParseLine("_Load Testing")) << "Threw while loading.";
 
 	// Verifying...
-	ASSERT_NO_THROW(optPar->ParseLine("fourThirteen"));
-	ASSERT_DOUBLE_EQ(413.0, optPar->GetLitMan().GetLast());
+	EXPECT_NO_THROW(optPar->ParseLine("fourThirteen"));
+	EXPECT_DOUBLE_EQ(413.0, optPar->GetLitMan().GetLast());
 
-	ASSERT_NO_THROW(optPar->ParseLine("tenEighty"));
-	ASSERT_DOUBLE_EQ(1080.0, optPar->GetLitMan().GetLast());
+	EXPECT_NO_THROW(optPar->ParseLine("tenEighty"));
+	EXPECT_DOUBLE_EQ(1080.0, optPar->GetLitMan().GetLast());
 
+	// Can't use asserts because of this shit right here.
 	// Clean up by opening the file without the append flag.
-	std::ofstream{Ser::GetPath() / "Testing.txt"};
+	std::ofstream{IO::GetSerializationPath() / "Testing.txt"};
 }
 
 PARSER_TEST(Serializing_a_function) {
@@ -529,22 +531,23 @@ PARSER_TEST(Serializing_a_function) {
 	optPar->ParseLine("_Func Sub a b");
 	optPar->ParseLine("    _Return a b -;");
 	// Saving...
-	ASSERT_NO_THROW(optPar->ParseLine("_Save Add Testing;")) << "Threw while saving.";
-	ASSERT_NO_THROW(optPar->ParseLine("_Save Sub Testing;")) << "Threw while saving.";
+	EXPECT_NO_THROW(optPar->ParseLine("_Save Add Testing;")) << "Threw while saving.";
+	EXPECT_NO_THROW(optPar->ParseLine("_Save Sub Testing;")) << "Threw while saving.";
 
 	// Restarting...
 	optPar.emplace(GenerateTestingInstance());
 
 	// Loading...
-	ASSERT_NO_THROW(optPar->ParseLine("_Load Testing;")) << "Threw while loading.";
+	EXPECT_NO_THROW(optPar->ParseLine("_Load Testing;")) << "Threw while loading.";
 
 	// Verifying...
-	ASSERT_NO_THROW(optPar->ParseLine("5 10 Add;"));
-	ASSERT_DOUBLE_EQ(5 + 10, optPar->GetLitMan().GetLast());
+	EXPECT_NO_THROW(optPar->ParseLine("5 10 Add;"));
+	EXPECT_DOUBLE_EQ(5 + 10, optPar->GetLitMan().GetLast());
 
-	ASSERT_NO_THROW(optPar->ParseLine("5 10 Sub;"));
-	ASSERT_DOUBLE_EQ(5 - 10, optPar->GetLitMan().GetLast());
+	EXPECT_NO_THROW(optPar->ParseLine("5 10 Sub;"));
+	EXPECT_DOUBLE_EQ(5 - 10, optPar->GetLitMan().GetLast());
 
+	// Can't use asserts because of this shit right here.
 	// Clean up by opening the file without the append flag.
-	std::ofstream{Ser::GetPath() / "Testing.txt"};
+	std::ofstream{IO::GetSerializationPath() / "Testing.txt"};
 }

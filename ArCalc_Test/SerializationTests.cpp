@@ -77,7 +77,8 @@ SER_TEST(Serializing_a_function) {
 
 		// Lines. I know I could just use the std::vector == operator, but this gives me 
 		// more information.
-		for (auto const nCodeLine : view::iota(0U, func.Params.size())) {
+		ASSERT_EQ(func.CodeLines.size(), deserializedVer.CodeLines.size());
+		for (auto const nCodeLine : view::iota(0U, func.CodeLines.size())) {
 			ASSERT_EQ(func.CodeLines[nCodeLine], deserializedVer.CodeLines[nCodeLine])
 				<< std::format("iteration: {}, line index: {}", nSer, nCodeLine);
 		}

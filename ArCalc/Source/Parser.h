@@ -132,6 +132,8 @@ namespace ArCalc {
 		constexpr auto IsExecutingFunction() const 
 			{ return m_bInFunction; }
 		bool IsParsingFunction() const;
+
+		bool IsParsingSelectionStatement() const;
 		
 		constexpr auto GetLineNumber() const 
 			{ return m_LineNumber; }
@@ -144,6 +146,8 @@ namespace ArCalc {
 			{ return m_LitMan; }
 		FunctionManager const& GetFunMan() const 
 			{ return m_FunMan; }
+
+		void ExceptionReset();
 
 	private:
 		void HandleFirstToken();

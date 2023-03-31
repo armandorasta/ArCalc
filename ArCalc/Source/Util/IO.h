@@ -61,6 +61,8 @@ namespace ArCalc::IO {
 		return Print(std::cout, formatString, std::forward<FormatArgs>(fmtArgs)...);
 	}
 
+	[[nodiscard]] std::string Read(std::istream& is, size_t byteCount);
+
 	[[nodiscard]] std::string FileToString(fs::path const& filePath, bool bKeepTrailingNulls = false);
 	[[nodiscard]] size_t IStreamSize(std::istream& is);
 
@@ -93,4 +95,5 @@ namespace ArCalc::IO {
 	}
 
 	[[nodiscard]] std::string IStreamToString(std::istream& is, bool bKeepTrailingNulls = false);
+	fs::path GetSerializationPath();
 }

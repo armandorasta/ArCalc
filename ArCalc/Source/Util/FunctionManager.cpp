@@ -19,10 +19,10 @@ namespace ArCalc {
 
 	ParamData ParamData::MakeByValue(std::string_view paramName, bool bParameterPack) {
 		ParamData data{paramName};
-		data.bReference = false;
+		data.m_bReference = false;
 
 		if (bParameterPack) {
-			ARCALC_NOT_IMPLEMENTED();
+			ARCALC_NOT_IMPLEMENTED("Parameter packs");
 			// data.m_ByValue.IsParameterPack = bParameterPack;
 		}
 
@@ -31,7 +31,7 @@ namespace ArCalc {
 
 	ParamData ParamData::MakeByRef(std::string_view paramName) {
 		ParamData data{paramName};
-		data.bReference = true;
+		data.m_bReference = true;
 		return data;
 	}
 
@@ -43,12 +43,17 @@ namespace ArCalc {
 	void ParamData::PushValue(double newValue) {
 		ARCALC_DA(!IsPassedByRef(), "Push on by-reference parameter");
 		
-		if (/*!m_ByValue.IsParameterPack &&*/ !m_ByValue.Values.empty()) {
-			ARCALC_NOT_IMPLEMENTED();
-			// ARCALC_DE("Pushing more than one value on a normal by-value parameter");
+		// if (!m_ByValue.IsParameterPack && !m_ByValue.Values.empty()) {
+		// 	ARCALC_NOT_IMPLEMENTED("Parameter packs");
+		// 	// ARCALC_DE("Pushing more than one value on a normal by-value parameter");
+		// }
+
+		if (m_ByValue.Values.size() == 1) {
+			m_ByValue.Values.front() = newValue;
+		} else {
+			m_ByValue.Values.push_back(newValue);
 		}
-		
-		m_ByValue.Values.push_back(newValue);
+
 		m_ByRef.Ptr = {};
 	}
 
@@ -78,7 +83,9 @@ namespace ArCalc {
 
 	void FunctionManager::BeginDefination(std::string_view funcName, size_t lineNumber) {
 		ARCALC_DA(!IsDefinationInProgress(), "{} inside another function", Util::FuncName());
-		ARCALC_EXPECT(!IsDefined(funcName), "Multiple definations of function [{}]", funcName);
+		if (IsDefined(funcName)) {
+			throw ParseError{"Multiple definations of function [{}]", funcName};
+		}
 		m_CurrFuncName = funcName;
 		m_CurrFuncData.HeaderLineNumber = lineNumber;
 	}
@@ -131,7 +138,9 @@ namespace ArCalc {
 	}
 
 	void FunctionManager::EndDefination() {
-		ARCALC_EXPECT(!m_CurrFuncData.CodeLines.empty(), "Adding an empty function");
+		if (m_CurrFuncData.CodeLines.empty()) {
+			throw ParseError{"Adding an empty function"};
+		}
 		m_FuncMap.emplace(std::exchange(m_CurrFuncName, ""), std::exchange(m_CurrFuncData, {}));
 	}
 
@@ -150,7 +159,7 @@ namespace ArCalc {
 	}
 
 	void FunctionManager::AddParamImpl(std::string_view paramName, bool bParameterPack, 
-		bool bReference) 
+		bool m_bReference) 
 	{
 		ARCALC_DA(IsDefinationInProgress(), "{} outside defination", Util::FuncName());
 		ARCALC_DA(!m_CurrFuncData.IsVariadic, "Adding parameter after making function variadic");
@@ -167,7 +176,7 @@ namespace ArCalc {
 			};
 		}
 
-		m_CurrFuncData.Params.push_back(bReference 
+		m_CurrFuncData.Params.push_back(m_bReference 
 			? ParamData::MakeByRef(paramName) 
 			: ParamData::MakeByValue(paramName, bParameterPack));
 		m_CurrFuncData.IsVariadic = bParameterPack;
@@ -187,7 +196,7 @@ namespace ArCalc {
 
 		auto& func{Get(funcName)};
 		if (func.IsVariadic) {
-			ARCALC_NOT_IMPLEMENTED();
+			ARCALC_NOT_IMPLEMENTED("Variadic functions");
 
 			// auto& parameterPack{func.Params.back().Values};
 			// for (auto const arg : args | view::drop(func.Params.size())) { // Drop the named arguments.
@@ -221,7 +230,7 @@ namespace ArCalc {
 			std::format_to(outIt, "{{ ref {:d} {} }} ", param.IsPassedByRef(), param.GetName());
 
 			if (param.IsParameterPack()) {
-				ARCALC_NOT_IMPLEMENTED();
+				ARCALC_NOT_IMPLEMENTED("Parameter packs");
 			}
 		}
 
@@ -233,20 +242,20 @@ namespace ArCalc {
 		for (auto const& line : func.CodeLines) {
 			std::format_to(outIt, "\t{}\n", line);
 		}
-		res += "}\n";
+		res += "}\n\n";
 
 		os << res;
 	}
 
 	void FunctionManager::Deserialize(std::istream& is) {
-		auto const expectSeq = [&](std::string_view what) {
-#ifdef NDEBUG
-			is.seekg(what.size(), std::ios::cur);
+		auto const expectSeq = [&](char const* what) {
+			auto const size{std::strlen(what)};
+#if 0 // Optimization that will fail have of the tests, not worth my time. 
+			is.seekg(size, std::ios::cur);
 #else // ^^^^ Release, vvvv Debug
-			std::string rubbish{};
-			rubbish.resize(what.size());
-			is.read(rubbish.data(), rubbish.size());
-			ARCALC_DA(rubbish == what, "Deserializing function: expected exactly `{}` but found `{}`", 
+			auto const rubbish{IO::Read(is, size)};
+			ARCALC_DA(rubbish == what, 
+				"Deserializing function: expected exactly `{}` but found `{}`", 
 				what, rubbish);
 #endif
 		};
@@ -275,12 +284,12 @@ namespace ArCalc {
 		// Return type.
 		func.ReturnType = IO::Input<size_t>(is) == 1 ? FuncReturnType::Number 
 		                                             : FuncReturnType::None;
-
 		// Lines of code.
 		auto const lineCount{IO::Input<size_t>(is)};
 		expectSeq(" {\n");
 		for ([[maybe_unused]] auto const i : view::iota(0U, lineCount)) {
-			func.CodeLines.emplace_back(IO::GetLine(is).substr(1)); // Skip the tab at the begining.
+			auto const line{IO::GetLine(is)};
+			func.CodeLines.emplace_back(std::string_view{line}.substr(1)); // Skip the tab at the begining.
 		}
 		expectSeq("}\n");
 

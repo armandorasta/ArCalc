@@ -1,11 +1,11 @@
 #include "Parser.h"
+#include "KeywordType.h"
 #include "Util/Util.h"
 #include "PostfixMathEvaluator.h"
 #include "Util/FunctionManager.h"
 #include "Util/Str.h"
 #include "Util/IO.h"
 #include "Util/MathConstant.h"
-#include "Util/Ser.h"
 
 namespace ArCalc {
 	enum class Parser::St : size_t {
@@ -37,7 +37,6 @@ namespace ArCalc {
 		}
 #endif // ^^^^ Debug mode only.
 
-
 		if (bValidation) {
 			// Validation will make all parameter packs have size 1 for now, because the sub-parser 
 			// will evaluate all branches anyway.
@@ -58,7 +57,7 @@ namespace ArCalc {
 				m_LitMan.Add(param.GetName(), param.GetValue());
 
 				if (param.IsParameterPack()) {
-					ARCALC_NOT_IMPLEMENTED();
+					ARCALC_NOT_IMPLEMENTED("Parameter packs");
 					// Avoid doublicating the first argument in the pack.
 					//                            vvvv
 					// for (auto const i : view::iota(1U, param.Values.size())) {
@@ -72,7 +71,7 @@ namespace ArCalc {
 	void Parser::ParseFile(fs::path const& filePath) {
 		std::ifstream file{filePath};
 		if (!file.is_open()) {
-			throw ArCalcException{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
+			throw ParseError{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
 		}
 
 		ParseIStream(file);
@@ -81,7 +80,7 @@ namespace ArCalc {
 	void Parser::ParseFile(fs::path const& filePath, fs::path const& outFilePath) {
 		std::ifstream file{filePath};
 		if (!file.is_open()) {
-			throw ArCalcException{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
+			throw ParseError{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
 		}
 
 		std::ofstream outFile{outFilePath};
@@ -157,23 +156,30 @@ namespace ArCalc {
 		return GetState() == St::Val_LineCollection; 
 	}
 
+	bool Parser::IsParsingSelectionStatement() const {
+		return GetState() == St::Val_SelectionNewLine; 
+	}
+
 	std::optional<double> Parser::GetReturnValue([[maybe_unused]] FuncReturnType retype) {
 #ifndef NDEBUG // retype is not checked in Release.
 		if (retype == FuncReturnType::None && m_ReturnValueRegister.has_value()) {
-			throw ArCalcException{
+			throw ParseError{
 				"Invalid function return type: expected {} but found {}",
 				FuncReturnType::Number, retype
 			};
 		} else if (retype == FuncReturnType::Number && !m_ReturnValueRegister.has_value()) {
-			throw ArCalcException{
+			throw ParseError{
 				"Invalid function return type: expected {} but found {}",
 				FuncReturnType::None, retype
 			};
 		}
-#endif // ^^^^ Debug mode only
+#endif // ^^^^ Debug mode only.
 		return std::exchange(m_ReturnValueRegister, {});
 	}
 
+	void Parser::ExceptionReset() {
+		// m_LineNumber += 1;
+	}
 
 	void Parser::HandleFirstToken() {
 		auto const firstToken{Str::GetFirstToken(m_CurrentLine)};
@@ -209,19 +215,22 @@ namespace ArCalc {
 		ARCALC_NOT_POSSIBLE(!(state == St::Default || state == St::Val_SubParser));
 
 		KeywordDebugDoubleCheck(Str::ChopFirstToken<std::string_view>(m_CurrentLine), KeywordType::Set);
-		auto const name{Str::ChopFirstToken<std::string_view, std::string_view>(m_CurrentLine)};
+
+		auto const name{Str::ChopFirstToken<std::string_view>(m_CurrentLine)};
 		ExpectIdentifier(name);
 
 		auto const value = [&] {
-			auto const opt{Eval(m_CurrentLine)};
-			ARCALC_EXPECT(opt.has_value(), "Setting literal [{}] to an expression that returns none", name);
-			return *opt;
+			if (auto const opt{Eval(m_CurrentLine)}; opt.has_value()) {
+				return *opt;
+			} else throw ParseError{
+				"Setting literal [{}] to an expression returns none.\n"
+				"The expression was most probably a function returns None",
+				name
+			};
 		}();
 
-		if (m_LitMan.IsVisible(name)) {
-			*m_LitMan.Get(name) = value;
-		} 
-		else m_LitMan.Add(name, value);
+		if (m_LitMan.IsVisible(name)) { *m_LitMan.Get(name) = value; } 
+		else                          { m_LitMan.Add(name, value); }
 
 		if (state == St::Default && !IsLineEndsWithSemiColon()) {
 			IO::Print(GetOStream(), "{} = {}\n", name, value);
@@ -229,8 +238,9 @@ namespace ArCalc {
 	}
 
 	void Parser::HandleListKeyword() {
-		if (GetState() == St::Val_SubParser)
+		if (GetState() == St::Val_SubParser) {
 			return;
+		}
 
 		auto const tokens{Str::SplitOnSpaces(m_CurrentLine)};
 		if (tokens.size() < 2) { m_LitMan.List(); }
@@ -239,26 +249,34 @@ namespace ArCalc {
 
 	void Parser::HandleFuncKeyword() {
 		if (GetState() == St::Val_SubParser) {
-			throw ArCalcException{
+			throw SyntaxError{
 				"Found keyword [{}] in an invalid context (inside a function)", 
 				KeywordType::Func
 			};
 		}
 
-		auto const tokens{Str::SplitOnSpaces(m_CurrentLine)};
+		auto const tokens{Str::SplitOnSpaces<std::string_view>(m_CurrentLine)};
 		KeywordDebugDoubleCheck(tokens.front(), KeywordType::Func);
 		
 		if (tokens.size() == 1) {
-			throw ArCalcException{"Expected Function name, but found nothing"};
+			throw ParseError{
+				"Expected Function name after {0} keyword, but found nothing.\n"
+				"{0} [function name] [parameter list]",
+				KeywordType::Func
+			};
 		} 
 
 		// Function name
-		auto funcName = std::string_view{tokens[1]};
+		auto& funcName = tokens[1];
 		ExpectIdentifier(funcName);
 		m_FunMan.BeginDefination(funcName, GetLineNumber());
 
 		if (tokens.size() == 2) {
-			throw ArCalcException{"Expected at least one parameter, but found none"};
+			throw ParseError{
+				"Expected at least one parameter after the name of the function, but found none"
+				"{} [function name] [parameter list]",
+				KeywordType::Func
+			};
 		}
 		
 		// Function parameters
@@ -266,7 +284,7 @@ namespace ArCalc {
 			auto const& paramName{tokens[i]};
 			if (paramName.front() == '&') {
 				if (paramName.size() < 2) { // More helpful error message.
-					throw ArCalcException{
+					throw SyntaxError{
 						"There may not be any space between the & and the name of a by-reference parameter"
 					};
 				}
@@ -275,7 +293,7 @@ namespace ArCalc {
 				ExpectIdentifier(currParamName);
 				m_FunMan.AddRefParam(currParamName);
 			} else if (paramName.ends_with("...")) {
-				ARCALC_NOT_IMPLEMENTED();
+				ARCALC_NOT_IMPLEMENTED("Parameter packs ");
 				// ARCALC_DA(i == tokens.size() - 1, "Found '...' in the middle of the parameter list");
 				// ARCALC_DA(paramName.size() > 3, "Found '...' but no variable name");
 				// 
@@ -289,7 +307,7 @@ namespace ArCalc {
 			}
 		}
 
-		// Check function body for syntax errors
+		// Check function body for syntax errors.
 		m_pValidationSubParser = std::make_unique<Parser>(GetOStream(), m_FunMan.CurrParamData(), true);
 		m_pValidationSubParser->SetState(St::Val_SubParser);
 		SetState(St::Val_LineCollection);
@@ -299,16 +317,13 @@ namespace ArCalc {
 		switch (GetState()) {
 		case St::Default: {
 			if (!IsExecutingFunction()) {
-				throw ArCalcException{"Found {} in global scope", KeywordType::Return};
+				throw SyntaxError{"Found {} in global scope", KeywordType::Return};
 			}
 
 			KeywordDebugDoubleCheck(Str::ChopFirstToken(m_CurrentLine), KeywordType::Return);
 
-			if (m_CurrentLine.empty()) {
-				m_ReturnValueRegister = {};
-			} else {
-				m_ReturnValueRegister = Eval(m_CurrentLine);
-			}
+			if (m_CurrentLine.empty()) { m_ReturnValueRegister = {}; } 
+			else                       { m_ReturnValueRegister = Eval(m_CurrentLine); }
 
 			break;
 		}
@@ -347,28 +362,31 @@ namespace ArCalc {
 	void Parser::HandleSelectionKeyword() {
 		if (!IsExecutingFunction()) {
 			// The flag must be turned on when creating the sub-parser for validation as well!!!
-			throw ArCalcException{"Found selection statement in global scope"};
+			throw ParseError{"Found selection statement in global scope"};
 		}
 		auto const state{GetState()};
-		
+
 		switch (auto const keyword{*Keyword::FromString(Str::ChopFirstToken(m_CurrentLine))}; keyword) {
 		case KeywordType::Elif:
-			ARCALC_EXPECT(m_bConditionRegister.has_value(), "Found a hanging [{}] keyword", keyword);
+			if (!m_bConditionRegister.has_value()) {
+				throw ParseError{"Found a hanging [{}] keyword", keyword};
+			}
 			[[fallthrough]];
 		case KeywordType::If: {
 			ARCALC_NOT_POSSIBLE(!(state == St::Default || state == St::Val_SubParser));
 
 			auto const [cond, statement] {ParseConditionalHeader(m_CurrentLine)};
 			if (cond.empty()) {
-				throw ArCalcException{
+				throw ParseError{
 					"Expected a condition after keyword [{}], but found nothing", 
 					keyword
 				};
 			}
 
-			auto const opt{Eval(cond)};
-			ARCALC_EXPECT(opt.has_value(), "Found expression returns none in condition");
-			m_bConditionRegister = std::abs(*opt - 0.0) > 0.000001;
+			if (auto const opt{Eval(cond)}; opt.has_value()) {
+				m_bConditionRegister = std::abs(*opt - 0.0) > 0.000001;
+			}
+			else throw ParseError{"Found expression returns none in condition"};
 
 			if (statement.empty()) {
 				SetState(state == St::Default ? St::SelectionNewLine 
@@ -382,7 +400,9 @@ namespace ArCalc {
 		}
 		case KeywordType::Else: {
 			ARCALC_NOT_POSSIBLE(!(state == St::Default || state == St::Val_SubParser));
-			ARCALC_EXPECT(m_bConditionRegister.has_value(), "Found a hanging [{}] keyword", keyword);
+			if (!m_bConditionRegister.has_value()) {
+				throw ParseError{"Found a hanging [{}] keyword", keyword};
+			}
 			m_bConditionRegister.reset(); // This disallows any elif's after this branch.
 
 			if (m_CurrentLine.empty()) {
@@ -403,7 +423,7 @@ namespace ArCalc {
 
 		if (bExecute) {
 			m_bSelectionBlockExecuted = true;
-			SetState(St::Default); // Reset the state so the statement executes without any problems.
+			//SetState(St::Default); // Reset the state so the statement executes without any problems.
 			HandleFirstToken();
 		}
 
@@ -437,7 +457,7 @@ namespace ArCalc {
 				condEndIndex != std::string::npos) 
 			{
 				if (kw != KeywordType::Set && kw != KeywordType::List) {
-					throw ArCalcException{
+					throw ParseError{
 						"Found keyword [{}] in an invalid context (inside a condition)", kw
 					};
 				}
@@ -457,26 +477,28 @@ namespace ArCalc {
 		KeywordDebugDoubleCheck(tokens.front(), KeywordType::Save);
 
 		if (tokens.size() > 3) {
-			throw ArCalcException{
+			throw ParseError{
 				"Too many tokens in line, expected only the target name, and the category name"
 			};
 		} else if (tokens.size() < 2) {
-			throw ArCalcException{"Expected name of target to be saved, but found nothing"};
+			throw ParseError{"Expected name of target to be saved, but found nothing"};
 		}
 
 		auto const& targetName{tokens[1]};
 		ExpectIdentifier(targetName);
 		
 		if (tokens.size() < 3) {
-			throw ArCalcException{"Expected name of category, but found nothing"};
+			throw ParseError{"Expected name of category, but found nothing"};
 		}
 
 		auto const& categoryName{tokens[2]};
 		ExpectIdentifier(categoryName);
 
+		auto const saveDir{IO::GetSerializationPath()}; 
+		fs::create_directory(saveDir);
 		std::ofstream file{
-			Ser::GetPath() / (std::string{categoryName} + ".txt"),
-			std::ios::app
+			saveDir / std::string{categoryName}.append(".txt"),
+			std::ios::app,
 		};
 
 		if (m_LitMan.IsVisible(targetName)) {
@@ -484,7 +506,7 @@ namespace ArCalc {
 		} else if (m_FunMan.IsDefined(targetName)) {
 			m_FunMan.Serialize(targetName, file);
 		} 
-		else throw ArCalcException{"Tried to save '{}' which does not refer to anything", targetName};
+		else throw ParseError{"Tried to save '{}' which does not refer to anything", targetName};
 	}
 
 	void Parser::HandleLoadKeyword() {
@@ -492,38 +514,30 @@ namespace ArCalc {
 		KeywordDebugDoubleCheck(tokens.front(), KeywordType::Load);
 
 		if (tokens.size() > 2) {
-			throw ArCalcException{
+			throw ParseError{
 				"Too many tokens in line, expected only the category name"
 			};
 		} else if (tokens.size() < 2) {
-			throw ArCalcException{"Expected name of category, but found nothing"};
+			throw ParseError{"Expected name of category, but found nothing"};
 		}
 		auto const& categoryName{tokens[1]};
-
-		std::ifstream file{
-			Ser::GetPath() / (std::string{categoryName} + ".txt"),
-			std::ios::app,
-		};
-		if (!file.is_open()) {
-			throw ArCalcException{"Loading non-existant category [{}]", categoryName};
+		auto const categoryFullPath{IO::GetSerializationPath() / std::string{categoryName}.append(".txt")};
+		if (!fs::exists(categoryFullPath)) {
+			throw ParseError{"Loading non-existant category [{}]", categoryName};
 		}
 
-		for (bool bQuit{}; !(bQuit || file.eof());) {
-			switch (auto const c{IO::Input<char>(file)}; c) {
-			case 'C': {
-				m_LitMan.Deserialize(file);
-				break;
-			}
-			case 'F': {
-				m_FunMan.Deserialize(file);
-				break;
-			}
-			case '\0': {
-				bQuit = true;
-				break;
-			}
-			default:
-				throw ArCalcException{
+		std::ifstream file{categoryFullPath, std::ios::app};
+		if (!file.is_open()) {
+			throw ParseError{"Loading non-existant category [{}]", categoryName};
+		}
+
+		for (bool bQuit{}; !(bQuit || file.eof());) switch (IO::Input<char>(file)) {
+			case 'C':   m_LitMan.Deserialize(file); break;
+			case 'F':   m_FunMan.Deserialize(file); break;
+			case '\n':  break;
+			case '\0':  bQuit = true; break;
+			default: {
+				throw ParseError{
 					"File deserialization failed; expected either C or F at the begining of the line"
 				};
 			}
@@ -546,9 +560,8 @@ namespace ArCalc {
 	}
 
 	void Parser::ExpectKeyword(std::string_view glyph, KeywordType type) {
-		auto const tokenOpt{Keyword::FromString(glyph)};
-		if (!tokenOpt || *tokenOpt != type) {
-			throw ArCalcException{"Expected keyword [{}]", type};
+		if (auto const tokenOpt{Keyword::FromString(glyph)}; !tokenOpt || *tokenOpt != type) {
+			throw ParseError{"Expected keyword [{}]", type};
 		}
 	}
 
@@ -561,16 +574,21 @@ namespace ArCalc {
 	}
 
 	void Parser::ExpectIdentifier(std::string_view what) {
-		ARCALC_EXPECT(!std::isdigit(what[0]), "Invalid identifier ({}); found digit [{}]", 
-			what, what[0]);
-		ARCALC_EXPECT(!Keyword::IsValid(what), "Expected identifier, but found keyword ({})", 
-			what);
-		ARCALC_EXPECT(!MathConstant::IsValid(what), 
-			"Expected identifier, but found math constant ({})", what);
+		if (std::isdigit(what[0])) {
+			throw SyntaxError{
+				"Invalid identifier ({}); found digit [{}]", what, what[0]
+			};
+		} else if (Keyword::IsValid(what)) {
+			throw SyntaxError{"Expected identifier, but found keyword ({})", what};
+		} else if (MathConstant::IsValid(what)) {
+			throw SyntaxError{
+				"Expected identifier, but found math constant ({})", what
+			};
+		}
 
 		for (auto const c : what) {
 			if (!Str::IsAlNum(c) && c != '_') {
-				throw ArCalcException{"Found invalid character [{}] in indentifier [{}]", c, what};
+				throw SyntaxError{"Found invalid character [{}] in indentifier [{}]", c, what};
 			}
 		}
 	}

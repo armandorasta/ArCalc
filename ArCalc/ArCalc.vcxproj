@@ -150,7 +150,6 @@
     <ClCompile Include="Source\Parser.cpp" />
     <ClCompile Include="Source\PostfixMathEvaluator.cpp" />
     <ClCompile Include="Source\Util\Random.cpp" />
-    <ClCompile Include="Source\Util\Ser.cpp" />
     <ClCompile Include="Source\Util\Str.cpp" />
     <ClCompile Include="Source\Util\Util.cpp" />
     <ClCompile Include="Source\ValueStack.cpp" />
@@ -170,7 +169,6 @@
     <ClInclude Include="Source\Parser.h" />
     <ClInclude Include="Source\PostfixMathEvaluator.h" />
     <ClInclude Include="Source\Util\Random.h" />
-    <ClInclude Include="Source\Util\Ser.h" />
     <ClInclude Include="Source\Util\Str.h" />
     <ClInclude Include="Source\Util\Util.h" />
     <ClInclude Include="Source\ValueStack.h" />

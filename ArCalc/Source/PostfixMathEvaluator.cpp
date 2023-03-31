@@ -22,24 +22,23 @@ namespace ArCalc {
 	PostfixMathEvaluator::PostfixMathEvaluator(LiteralManager& litMan, FunctionManager& funMan) 
 		: m_LitMan{litMan}, m_FunMan{funMan}
 	{
-		if (!MathOperator::IsInitialized()) {
-			MathOperator::Initialize();
-		}
 	}
 
 	std::optional<double> PostfixMathEvaluator::Eval(std::string_view exprString) {
-		ARCALC_DA(!exprString.empty(), "Evaluating empty expression");
+		if (exprString.empty()) {
+			throw ExprEvalError{"Evaluating empty expression"};
+		}
 		
 		for (auto const c : exprString) {
 			DoIteration(c); // To allow for recursive behaviour.
 		}
 		DoIteration(' '); // Cut any unfinished tokens.
 
-		// Incomplete evaluation
-		ARCALC_EXPECT(m_Values.Size() < 2, "Expression was not parsed completely"
-			"; too many values are still on the stack");
-
-		if (m_Values.IsEmpty()) {
+		if (m_Values.Size() > 1) { 
+			throw ExprEvalError{
+				"Expression was not parsed completely; too many values are still on the stack"
+			};
+		} else if (m_Values.IsEmpty()) {
 			return {};
 		} 
 		else return m_Values.Pop().Deref();
@@ -96,8 +95,7 @@ namespace ArCalc {
 			literalName = literalName.substr(bMinus ? 1U : 0U);
 			
 			if (m_LitMan.IsVisible(literalName)) {
-				if (bMinus) {
-					// Minus sign turns it into an rvalue.
+				if (bMinus) { // Minus sign turns it into an rvalue.
 					m_Values.PushRValue(*m_LitMan.Get(literalName) * -1.0);
 				} else {
 					m_Values.PushLValue(&m_LitMan.Get(literalName));
@@ -112,7 +110,7 @@ namespace ArCalc {
 				ARCALC_DE("Found keyword [{}] in invalid context (in the middle of an expression)",
 					literalName);
 			}
-			else throw ArCalcException{"Used of invalid name [{}]", literalName};
+			else throw ExprEvalError{"Used of invalid name [{}]", literalName};
 		}
 
 		ResetString();
@@ -121,17 +119,27 @@ namespace ArCalc {
 
 	void PostfixMathEvaluator::ParseNumber(char c) {
 		// Even something like '5PI' instead of '5 * PI' is not allowed for now.
-		ARCALC_DA(!std::isalpha(c) && c != '_', "Found alphabetic character [{}] while parsing number",
-			c);
+		if (std::isalpha(c)) {
+			throw ParseError{
+				"Found alphabetic character [{}] while parsing number.\n"
+				"Using the multiplication operator is mandatory", 
+				c
+			};
+		} else if (c == '_') {
+			throw ParseError{
+				"Found an underscore right after a number\n"
+				"Using the multiplication operator is mandatory", 
+			};
+		}
 
 		auto const state{GetState()};
 		ARCALC_NOT_POSSIBLE(!(state == St::ParsingNumber || state == St::FoundSingleQuote));
 
 		if (state == St::FoundSingleQuote) switch (c) {
 		case '.':
-			throw ArCalcException{"Found a ' just before a floating point while parsing a number"};
+			throw ExprEvalError{"Found a ' just before a floating point while parsing a number"};
 		case '\'':
-			throw ArCalcException{ "Found two ' in a row while parsing a number"};
+			throw ExprEvalError{ "Found two ' in a row while parsing a number"};
 		default: // One of the rare reachable ones.
 			SetState(St::ParsingNumber);
 			break; // Advised m_By K & R themselves.
@@ -141,12 +149,12 @@ namespace ArCalc {
 			AddChar(c);
 		} else if (c == '.') {
 			if (range::distance(GetString() | view::filter(Util::Eq('.'))) > 0U) {
-				throw ArCalcException{"Found a number with multiple floating points"};
+				throw ExprEvalError{"Found a number with multiple floating points"};
 			}
 			AddChar(c);
 		} else if (c == '\'') { // Single quotes are for readability 10000000 => 10'000'000.
 			if (auto const acc{GetString()}; !acc.empty() && acc.back() == '.') {
-				throw ArCalcException{"Found a ' right after a floating point while parsing a number"};
+				throw ExprEvalError{"Found a ' right after a floating point while parsing a number"};
 			}
 
 			SetState(St::FoundSingleQuote); // To check for some errors later ^^^
@@ -227,12 +235,19 @@ namespace ArCalc {
 
 	void PostfixMathEvaluator::EvalOperator() {
 		auto const& glyph{GetString()};
-		ARCALC_EXPECT(MathOperator::IsValid(glyph), "Invalid operator [{}]", glyph);
+		if (!MathOperator::IsValid(glyph)) {
+			throw ExprEvalError{"Invalid operator [{}]", glyph};
+		}
 
 		if (MathOperator::IsBinary(glyph)) {
-			ARCALC_EXPECT(m_Values.Size() > 0, "Found binary operator [{}] with no operands", glyph);
-			ARCALC_EXPECT(m_Values.Size() > 1, "Found binary operator [{}] with 1 operand with value [{}]",
-				glyph, m_Values.Top().Deref());
+			if (m_Values.Size() == 0) {
+				throw ExprEvalError{"Found binary operator [{}] with no operands", glyph};
+			} else if (m_Values.Size() == 1) {
+				throw ExprEvalError{
+					"Found binary operator [{}] with 1 operand with value [{}]", 
+					glyph, m_Values.Top().Deref()
+				};
+			}
 
 			auto const rhs{m_Values.Pop().Deref()};
 			auto const lhs{m_Values.Pop().Deref()}; 
@@ -240,7 +255,10 @@ namespace ArCalc {
 			// must be an rvalue.
 			m_Values.PushRValue(MathOperator::EvalBinary(glyph, lhs, rhs));
 		} else {
-			ARCALC_EXPECT(m_Values.Size() > 0, "Found unary operator [{}] with no operands", glyph);
+			if (m_Values.Size() == 0) {
+				throw ExprEvalError{"Found unary operator [{}] with no operands", glyph};
+			}
+			
 			auto const operand{m_Values.Pop().Deref()};
 			// Must pop here ^^^, explained in the other branch.
 			m_Values.PushRValue(MathOperator::EvalUnary(glyph, operand));
@@ -255,15 +273,17 @@ namespace ArCalc {
 			for (auto const i : view::iota(0U, params.size()) | view::reverse) {
 				auto& param{params[i]};
 				if (param.IsPassedByRef()) {
-					auto const top{m_Values.Pop()};
-					ARCALC_EXPECT(top.bLValue, "Passing rvalue [{}] by reference", top.Deref());
-					param.SetRef(top.Ptr);
+					if (auto const top{m_Values.Pop()}; top.bLValue) {
+						param.SetRef(top.Ptr);
+					} else {
+						throw ExprEvalError{"Passing rvalue [{}] by reference", top.Deref()};
+					}
 				} else {
 					param.PushValue(m_Values.Pop().Deref());
 				}
 			}
 		} else {
-			throw ArCalcException{
+			throw ExprEvalError{
 				"Function [{}] Expects [{}] arguments, but only [{}] are available in the stack",
 				funcName, params.size(), m_Values.Size()
 			};
@@ -282,9 +302,9 @@ namespace ArCalc {
 			throw;
 		}
 
-		for (auto& param : func.Params | view::filter([](auto& p) { return !p.IsPassedByRef(); })) {
-			param.ClearValues();
-		}
+		// for (auto& param : func.Params | view::filter([](auto& p) { return !p.IsPassedByRef(); })) {
+		// 	param.ClearValues();
+		// }
 	}
 
 	bool PostfixMathEvaluator::IsCharValidForIdent(char c) {

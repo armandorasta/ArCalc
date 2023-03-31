@@ -42,7 +42,7 @@ namespace ArCalc {
 		static ParamData MakeByRef(std::string_view paramName);
 
 		constexpr bool IsPassedByRef() const
-			{ return bReference; }
+			{ return m_bReference; }
 		void SetRef(double* toWhat);
 		double* GetRef() const
 			{ return m_ByRef.Ptr; }
@@ -59,7 +59,7 @@ namespace ArCalc {
 
 	private:
 		std::string m_Name;
-		bool bReference;
+		bool m_bReference;
 
 		struct { // Passing by value.
 			bool IsParameterPack{};
@@ -124,7 +124,7 @@ namespace ArCalc {
 
 	private:
 		void AddParamImpl(std::string_view paramName, bool bParameterPack = false, 
-			bool bReference = false);
+			bool m_bReference = false);
 		void MakeVariadic();
 
 	private:

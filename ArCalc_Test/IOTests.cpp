@@ -90,7 +90,7 @@ IO_TEST(Stream_to_string_trimming_trailing_nulls) {
 	constexpr auto MyString{"Hello, baby!"};
 	constexpr auto Nulls{"\0\0\0\0\0\0\0\0\0"};
 	std::stringstream ss{MyString + std::string{Nulls}};
-	ASSERT_EQ(MyString, IO::IStreamToString(ss));
+	ASSERT_EQ(MyString, IO::IStreamToString(ss, false));
 }
 
 IO_TEST(IStream_size) {

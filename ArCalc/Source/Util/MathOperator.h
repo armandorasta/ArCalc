@@ -22,29 +22,37 @@ namespace ArCalc {
 			std::function<double(std::vector<double> const&)> Func;
 		};
 
+		// This is a trick to initialize the class without having to manually call Initialize.
+		static MathOperator const s_InitializationInstance;
 		inline static std::unordered_map<std::string, OpInfo> s_Operators{};
 
-	public:
+	private:
+		MathOperator();
 
-		MathOperator() = delete;
-
 	public:
-		static bool IsInitialized();
-		static void Initialize();
 		static bool IsValid(std::string_view op);
 		static bool IsUnary(std::string_view op);
 		static bool IsBinary(std::string_view op);
 
-	public:
 		static double EvalBinary(std::string_view op, double lhs, double rhs);
 		static double EvalUnary(std::string_view op, double operand);
 
 	private:
-		static void AddOperator(std::string const& glyph, OT type,
+		static bool IsInitialized();
+		static void Initialize();
+		static void AddOperator(
+			std::string const& glyph, 
+			OT type,
 			std::function<double(std::vector<double> const&)>&& func);
-		static void AddUnaryOperator(std::string const& glyph, std::function<double(double)>&& func);
-		static void AddBinaryOperator(std::string const& glyph, std::function<double(double, double)>&& func);
-		static void AddTernaryOperator(std::string const& glyph, std::function<double(double, double, double)>&& func);
+		static void AddUnaryOperator(
+			std::string const& glyph, 
+			std::function<double(double)>&& func);
+		static void AddBinaryOperator(
+			std::string const& glyph, 
+			std::function<double(double, double)>&& func);
+		static void AddTernaryOperator(
+			std::string const& glyph, 
+			std::function<double(double, double, double)>&& func);
 		static void AddBasicOperators();
 		static void AddTrigOperators();
 		static double FloatFactorio(double n);

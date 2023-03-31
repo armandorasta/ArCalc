@@ -20,12 +20,6 @@ public:
 	}
 
 public:
-	void SetUp() override {
-		if (!MathOperator::IsInitialized()) {
-			MathOperator::Initialize();
-		}
-	}
-
 	static LiteralManager LitManFromLits(std::unordered_map<std::string_view, double>&& lits) {
 		LiteralManager litMan{GetStringStream()};
 		for (auto const& [name, value] : lits) {

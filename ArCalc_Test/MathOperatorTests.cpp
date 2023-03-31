@@ -8,13 +8,6 @@ using namespace ArCalc;
 
 class MathOperatorTests : public ::testing::Test {
 public:
-	void SetUp() override {
-		if (!MathOperator::IsInitialized()) {
-			MathOperator::Initialize();
-		}
-	}
-
-public:
 	inline static std::vector<char const*> const sc_MyOperators{
 		"+", "-", "*", "/",
 		"sin", "cos", "tan", "asin", "cosh",

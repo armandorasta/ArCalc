@@ -41,8 +41,6 @@ namespace ArCalc {
 
 		void EvalOperator();
 		void EvalFunction();
-		std::optional<double> CallFunction(std::string_view funcName, 
-			std::vector<double> const& args);
 
 		constexpr void SetLineNumber(size_t toWhat) 
 			{ m_LineNumber = toWhat; }

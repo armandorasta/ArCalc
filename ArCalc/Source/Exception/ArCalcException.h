@@ -15,7 +15,7 @@ namespace ArCalc {
 
 	public:
 		std::string GetMessage() const noexcept {
-			return std::format("Error ({}): {}", GetLineNumber(), m_Message);
+			return std::format("({}): {}", GetLineNumber(), m_Message);
 		}
 
 		template <class... FormatArgs>
@@ -42,44 +42,94 @@ namespace ArCalc {
 			bLineNumberSet = true;
 		}
 
-	private:
+	protected:
 		std::string m_Message{};
+
+	private:
 		size_t m_LineNumber{};
 		bool bLineNumberSet{};
 	};
+
+	/// Thrown when a debug-only assertion fails. This means that the program can
+	/// not continue and must terminate immediately. This may not be thrown in 
+	/// Release.
+	class DebugAssertionError : public ArCalcException {
+	public:
+		template <class... FormatArgs>
+		DebugAssertionError(char const* fileName, char const* funcName, size_t lineNumber, 
+			std::string_view message, FormatArgs&&... fmtArgs) : ArCalcException{""}
+		{
+			std::vformat_to(
+				std::back_inserter(m_Message), 
+				std::string{message} + ".\n\tFile: {}.\n\tFunction: {}.\n\tLineNumber: {}",
+				std::make_format_args(
+					std::forward<FormatArgs>(fmtArgs)...,
+					fileName, funcName, lineNumber
+				)
+			);
+		}
+	};
+
+	/// Thrown when an evaluator is passed an invalid expression.
+	/// When this is thrown, evaluation is abandoned, and any furthur use of the 
+	/// evaluator is undefined.
+	class ExprEvalError : public ArCalcException {
+	public:
+		using ArCalcException::ArCalcException;
+	};
+
+	/// Used by functions in the IO header.
+	class IOError : public ArCalcException {
+	public:
+		using ArCalcException::ArCalcException;
+	};
+
+	/// Thrown by parser when an error other than a syntax error happens.
+	class ParseError : public ArCalcException {
+	public:
+		using ArCalcException::ArCalcException;
+	};
+
+	/// Thrown by Parser and all evaluators.
+	class SyntaxError : public ArCalcException {
+	public:
+		using ArCalcException::ArCalcException;
+	};
+
+	/// Thrown by the MathOperator class.
+	class MathError : public ArCalcException {
+	public:
+		using ArCalcException::ArCalcException;
+	};
 }
-
-#define ARCALC_NOT_POSSIBLE(_alwaysFalse) \
-	assert(!(_alwaysFalse) && "Reached a condition assumed to be impossible")
-
-#define ARCALC_UNREACHABLE_CODE()         \
-	{                                     \
-		assert(!"Should be unreachable"); \
-		std::unreachable();               \
-	}
-
-#define ARCALC_NOT_IMPLEMENTED()        \
-	{                                   \
-		assert(!"Not implemented yet"); \
-		std::unreachable();             \
-	}
-
-
-/// This macro is the same as ARCALC_DA, except it survives in release builds as well.
-#define ARCALC_EXPECT(_cond, _message, ...) \
-	if (!(_cond)) throw ::ArCalc::ArCalcException{_message, __VA_ARGS__} \
 
 #ifdef NDEBUG
 
 #define ARCALC_DA(_cond, _message, ...)
 #define ARCALC_DE(_message, ...)
 
-#else // ^^^^^^ NDEBUG  vvvvvvv !NDEBUG
+#define ARCALC_NOT_POSSIBLE(_alwaysFalse)  
+#define ARCALC_UNREACHABLE_CODE()
+#define ARCALC_NOT_IMPLEMENTED(_whatIsNotImplemented)
+
+#else // ^^^^ Release, vvvv Debug
 
 /// ArCalc Debug Assert.
-#define ARCALC_DA(_cond, _message, ...) ARCALC_EXPECT(_cond, _message, __VA_ARGS__)
+#define ARCALC_DA(_cond, _message, ...) \
+	if (!(_cond)) throw ::ArCalc::DebugAssertionError{__FILE__, __FUNCTION__, static_cast<::ArCalc::size_t>(__LINE__), _message, __VA_ARGS__}
+
 
 /// ArCalc Debug Error.
-#define ARCALC_DE(_message, ...)        throw ::ArCalc::ArCalcException{_message, __VA_ARGS__}
+#define ARCALC_DE(_message, ...) ARCALC_DA(false, _message, __VA_ARGS__)
+
+#define ARCALC_NOT_POSSIBLE(_alwaysFalse) \
+	ARCALC_DA(!(_alwaysFalse), "Program reached a state assumed to be impossible")
+
+#define ARCALC_UNREACHABLE_CODE() \
+	ARCALC_DE("Program managed to flow through an unreachable code path")
+
+#define ARCALC_NOT_IMPLEMENTED(_whatIsNotImplemented) \
+		ARCALC_DE("Program managed to flow through a code path not implemented yet: " _whatIsNotImplemented);
+
 
 #endif // NDEBUG

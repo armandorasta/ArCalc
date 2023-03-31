@@ -43,7 +43,7 @@ namespace ArCalc {
 				IO::Print(m_OStream, "{}{} = {}\n", Tab, name, *data);
 			}
 		}
-		IO::Output(m_OStream, "}");
+		IO::Output(m_OStream, "}\n");
 	}
 
 	LiteralData const& LiteralManager::Get(std::string_view litName) const {

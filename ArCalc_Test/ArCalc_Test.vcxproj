@@ -56,6 +56,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
+    <ClInclude Include="TestingHelperMacros.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FunctionManagerTests.cpp" />
