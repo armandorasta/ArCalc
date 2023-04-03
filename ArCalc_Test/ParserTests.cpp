@@ -44,33 +44,44 @@ public:
 };
 
 PARSER_TEST(Semicolon_at_end_of_line) {
-	constexpr auto code{
-R"(5 10 +
-   _List
-   _Func Max a b
-   _Set ret a
-   _If a b <
-   _Set ret b
-   _Return ret)"
-	};
-	
-	auto const lines{Str::SplitOn(code, "\n")};
+	// Verbose, but easy to debug.
+
 	// Without ;
 	{
 		auto par{GenerateTestingInstance()};
-		for (auto const& line : lines) {
-			ASSERT_NO_THROW(par.ParseLine(line));
-			ASSERT_FALSE(par.IsLineEndsWithSemiColon());
-		}
+		ASSERT_NO_THROW(par.ParseLine("5 10 +"));
+		ASSERT_FALSE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_List"));
+		ASSERT_FALSE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_Func Max a b"));
+		ASSERT_FALSE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_Set ret a"));
+		ASSERT_FALSE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_If a b <:"));
+		ASSERT_FALSE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_Set ret b"));
+		ASSERT_FALSE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_Return ret"));
+		ASSERT_FALSE(par.IsLineEndsWithSemiColon());
 	}
 
 	// With ;
 	{
 		auto par{GenerateTestingInstance()};
-		for (auto const& line : lines) {
-			ASSERT_NO_THROW(par.ParseLine(line + ";"));
-			ASSERT_TRUE(par.IsLineEndsWithSemiColon());
-		}
+		ASSERT_NO_THROW(par.ParseLine("5 10 +;"));
+		ASSERT_TRUE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_List;"));
+		ASSERT_TRUE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_Func Max a b;"));
+		ASSERT_TRUE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_Set ret a;"));
+		ASSERT_TRUE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_If a b <:;"));
+		ASSERT_TRUE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_Set ret b;"));
+		ASSERT_TRUE(par.IsLineEndsWithSemiColon());
+		ASSERT_NO_THROW(par.ParseLine("_Return ret;"));
+		ASSERT_TRUE(par.IsLineEndsWithSemiColon());
 	}
 }
 
@@ -81,7 +92,7 @@ PARSER_TEST(Normal_expression_and_Last_keyword) {
 	ASSERT_DOUBLE_EQ(15.0, par.GetLitMan().GetLast());
 }
 
-PARSER_TEST(Set_statement) {
+PARSER_TEST(Set_statement_and_literal_name_clashes) {
 	auto par{GenerateTestingInstance()};
 	auto& litMan{par.GetLitMan()};
 
@@ -89,6 +100,17 @@ PARSER_TEST(Set_statement) {
 	ASSERT_TRUE(par.IsLineEndsWithSemiColon());
 	ASSERT_TRUE(litMan.IsVisible("x"));
 	ASSERT_DOUBLE_EQ(5.0, *litMan.Get("x"));
+
+	// Constants may not be overriden.
+	ASSERT_ANY_THROW(par.ParseLine("_Set _pi 5.0"));
+
+	// Already defined functions may not be overriden.
+	par.ParseLine("_Func MyFunc param");
+	par.ParseLine("_Return;");
+	ASSERT_ANY_THROW(par.ParseLine("_Set MyFunc 5.0"));
+
+	// Built in operators may not be overriden.
+	ASSERT_ANY_THROW(par.ParseLine("_Set abs 5.0"));
 }
 
 PARSER_TEST(Set_statement_setting_a_literal_more_than_once) {
@@ -102,23 +124,41 @@ PARSER_TEST(Set_statement_setting_a_literal_more_than_once) {
 	}
 }
 
+PARSER_TEST(Function_name_clashes) {
+	auto par{GenerateTestingInstance()};
+
+	// Functions my not be overriden or overloaded.
+	par.ParseLine("_Func MyFunc param");
+	par.ParseLine("_Return;");
+	ASSERT_ANY_THROW(par.ParseLine("_Func MyFunc param1 param2"));
+
+	// Function and literal names may not clash.
+	par.ParseLine("_Set myVar 5.0;");
+	ASSERT_ANY_THROW(par.ParseLine("_Func myVar param"));
+
+	// Function and constant names may not clash.
+	// Simple don't prefix your function names with an underscore.
+	ASSERT_ANY_THROW(par.ParseLine("_Func _pi param"));
+	
+	// Function and operator names may not clash.
+	// To avoid this, simply start all your function names with a capital letter.
+	ASSERT_ANY_THROW(par.ParseLine("_Func sign param"));
+}
+
 PARSER_TEST(Defining_a_function_with_no_refs) {
-	using namespace std::string_view_literals;
-	constexpr std::array Lines{
-		"_Func Add a b"sv,
-		"_Set sum a b +"sv,
-		"_Return sum"sv,
-	};
-
 	Parser par{GenerateTestingInstance()};
-	ASSERT_FALSE(par.IsParsingFunction());
-	for (auto const& line : Lines | view::take(std::size(Lines) - 1)) {
-		ASSERT_NO_THROW(par.ParseLine(line));
-		ASSERT_TRUE(par.IsParsingFunction());
-	}
 
-	ASSERT_NO_THROW(par.ParseLine(Lines.back()));
 	ASSERT_FALSE(par.IsParsingFunction());
+	
+	ASSERT_NO_THROW(par.ParseLine("_Func Add a b"));
+	ASSERT_TRUE(par.IsParsingFunction());
+
+	ASSERT_NO_THROW(par.ParseLine("_Set sum a b +;"));
+	ASSERT_TRUE(par.IsParsingFunction());
+
+	ASSERT_NO_THROW(par.ParseLine("_Return sum;"));
+	ASSERT_FALSE(par.IsParsingFunction());
+
 	ASSERT_TRUE(par.GetFunMan().IsDefined("Add"));
 }
 
@@ -163,17 +203,10 @@ PARSER_TEST(Defining_a_function_with_refs) {
 PARSER_TEST(Executing_a_function_with_no_refs) {
 	constexpr std::string_view FuncName{"Sub"};
 
-	using namespace std::string_literals;
-	std::array Lines{
-		std::format("_Func {} a b\n", FuncName),
-		"_Set res a b -\n"s,
-		"_Return res\n"s,
-	};
-
 	Parser par{GenerateTestingInstance()};
-	for (auto const& line : Lines) {
-		par.ParseLine(line); // Already tested above.
-	}
+	par.ParseLine(std::format("_Func {} a b\n", FuncName));
+	par.ParseLine("_Set res a b -\n");
+	par.ParseLine("_Return res\n");
 
 	for (auto const lhs : view::iota(-10, 10)) {
 		auto const rhs{std::ceil(Random::Double(-10.0, 10.0))};
@@ -233,7 +266,7 @@ PARSER_TEST(Passing_through_a_by_value_param) {
 	ASSERT_DOUBLE_EQ(0.0, *par.GetLitMan().Get("a")); // No modification please.
 
 	ASSERT_NO_THROW(par.ParseLine("5 FuncByValue"));
-	ASSERT_NO_THROW(par.ParseLine("pi FuncByValue"));
+	ASSERT_NO_THROW(par.ParseLine("_pi FuncByValue"));
 	ASSERT_NO_THROW(par.ParseLine(std::format("{} FuncByValue", Keyword::ToString(KeywordType::Last))));
 }
 
@@ -261,14 +294,14 @@ PARSER_TEST(Selection_statement_one_branch) {
 	TestSelectionStatement("Same line",
 		"_Func Max a b\n"
 		"_Set ret a;\n"
-		"_If b a > _Set ret b;\n"
+		"_If b a >: _Set ret b;\n"
 		"_Return ret;\n"
 	);
 
 	TestSelectionStatement("Next line",
 		"_Func Max a b\n"
 		"_Set ret a;\n"
-		"_If b a >\n"
+		"_If b a >:\n"
 		"    _Set ret b;\n"
 		"_Return ret;\n"
 	);
@@ -277,14 +310,14 @@ PARSER_TEST(Selection_statement_one_branch) {
 PARSER_TEST(Selection_statement_if_else) {
 	TestSelectionStatement("Same same",
 		"_Func Max a b\n"
-		"_If a b > _Set ret a;\n"
-		"_Else     _Set ret b;\n"
+		"_If a b >: _Set ret a;\n"
+		"_Else      _Set ret b;\n"
 		"_Return ret;\n"
 	);
 
 	TestSelectionStatement("Same next",
 		"_Func Max a b\n"
-		"_If a b > _Set ret a;\n"
+		"_If a b >: _Set ret a;\n"
 		"_Else\n"
 		"    _Set ret b;\n"
 		"_Return ret;\n"
@@ -292,7 +325,7 @@ PARSER_TEST(Selection_statement_if_else) {
 
 	TestSelectionStatement("Next same",
 		"_Func Max a b\n"
-		"_If a b >\n"
+		"_If a b >:\n"
 		"    _Set ret a;\n"
 		"_Else _Set ret b;\n"
 		"_Return ret;\n"
@@ -300,7 +333,7 @@ PARSER_TEST(Selection_statement_if_else) {
 
 	TestSelectionStatement("Next next",
 		"_Func Max a b\n"
-		"_If a b >\n"
+		"_If a b >:\n"
 		"    _Set ret a;\n"
 		"_Else\n"
 		"    _Set ret b;\n"
@@ -311,32 +344,32 @@ PARSER_TEST(Selection_statement_if_else) {
 PARSER_TEST(Selection_statement_if_single_elif) {
 	TestSelectionStatement("Same same",
 		"_Func Max a b\n"
-		"_If a b >    _Set ret a;\n"
-		"_Elif a b <= _Set ret b;\n"
+		"_If a b >:    _Set ret a;\n"
+		"_Elif a b <=: _Set ret b;\n"
 		"_Return ret;\n"
 	);
 
 	TestSelectionStatement("Same next",
 		"_Func Max a b\n"
-		"_If a b > _Set ret a;\n"
-		"_Elif a b <=\n"
+		"_If a b >: _Set ret a;\n"
+		"_Elif a b <=:\n"
 		"    _Set ret b;\n"
 		"_Return ret;\n"
 	);
 
 	TestSelectionStatement("Next same",
 		"_Func Max a b\n"
-		"_If a b >\n"
+		"_If a b >:\n"
 		"    _Set ret a;\n"
-		"_Elif a b <= _Set ret b;\n"
+		"_Elif a b <=: _Set ret b;\n"
 		"_Return ret;\n"
 	);
 
 	TestSelectionStatement("Next next",
 		"_Func Max a b\n"
-		"_If a b >\n"
+		"_If a b >:\n"
 		"    _Set ret a;\n"
-		"_Elif a b <=\n"
+		"_Elif a b <=:\n"
 		"    _Set ret b;\n"
 		"_Return ret;\n"
 	);
@@ -347,9 +380,9 @@ PARSER_TEST(Selection_statement_multiple_elifs_rounding) {
 		// Defining the function
 		auto par{GenerateTestingInstance()};
 		par.ParseLine("_Func MyFunc a");
-		par.ParseLine("_If a 0 < _Set ret 0;");
+		par.ParseLine("_If a 0 <: _Set ret 0;");
 		for (auto const i : view::iota(1, currElifCount + 1)) {
-			ASSERT_NO_THROW(par.ParseLine(std::format("_Elif a {0} < _Set ret {0};", 5.0 * i)));
+			ASSERT_NO_THROW(par.ParseLine(std::format("_Elif a {0} <: _Set ret {0};", 5.0 * i)));
 		}
 		par.ParseLine(std::format("_Else _Set ret {};", 5.0 * currElifCount));
 		par.ParseLine("_Return ret;");
@@ -377,15 +410,15 @@ PARSER_TEST(Selection_statement_multiple_elifs_rounding) {
 PARSER_TEST(Selection_statement_multiple_decoder) {
 	auto par{GenerateTestingInstance()};
 	par.ParseLine("_Func ExecuteOpCode code a b");
-	par.ParseLine("_If   code 0 == _Set ret a b +;");
-	par.ParseLine("_Elif code 1 == _Set ret a b -;");
-	par.ParseLine("_Elif code 2 == _Set ret a b *;");
-	par.ParseLine("_Elif code 3 == _Set ret a b /;");
-	par.ParseLine("_Else           _Set ret _Inf;");
+	par.ParseLine("_If   code 0 ==: _Set ret a b +;");
+	par.ParseLine("_Elif code 1 ==: _Set ret a b -;");
+	par.ParseLine("_Elif code 2 ==: _Set ret a b *;");
+	par.ParseLine("_Elif code 3 ==: _Set ret a b /;");
+	par.ParseLine("_Else            _Set ret _inf;");
 	par.ParseLine("_Return ret;");
 
-	constexpr auto cppVersionOfExecuteOpCode = [](double code, double a, double b) constexpr {
-		double ret{};
+	constexpr auto cppVersionOfExecuteOpCode = [](auto code, auto a, auto b) constexpr {
+		double ret{}; // Not needed in the script, because the concept of scopes is non-existant.
 		if (code == 0.0)      { ret = a + b; }
 		else if (code == 1.0) { ret = a - b; }
 		else if (code == 2.0) { ret = a * b; }
@@ -405,20 +438,21 @@ PARSER_TEST(Selection_statement_multiple_decoder) {
 
 PARSER_TEST(Selection_statement_if_elif_else) {
 	// Depending on the above test, we can be confident that the behaviour of the if is completely
-	// separated from its else statement if it exists, so we only need to test one case of the if.
+	// independent of the behaveiuor of its else statement if it exists, so we only need to test 
+	// one case of the if.
 
 	TestSelectionStatement("Same same same",
 		"_Func Max a b\n"
-		"_If a b >   _Set ret a;\n"
-		"_Elif a b < _Set ret b;\n"
-		"_Else       _Set ret a;\n"
+		"_If a b >:   _Set ret a;\n"
+		"_Elif a b <: _Set ret b;\n"
+		"_Else        _Set ret a;\n"
 		"_Return ret;\n"
 	);
 
 	TestSelectionStatement("Same same next",
 		"_Func Max a b\n"
-		"_If a b >   _Set ret a;\n"
-		"_Elif a b < _Set ret b;\n"
+		"_If a b >:   _Set ret a;\n"
+		"_Elif a b <: _Set ret b;\n"
 		"_Else\n"
 		"    _Set ret a;\n"
 		"_Return ret;\n"
@@ -426,8 +460,8 @@ PARSER_TEST(Selection_statement_if_elif_else) {
 
 	TestSelectionStatement("Same next same",
 		"_Func Max a b\n"
-		"_If a b >   _Set ret a;\n"
-		"_Elif a b <\n"
+		"_If a b >:   _Set ret a;\n"
+		"_Elif a b <:\n"
 		"    _Set ret b;\n"
 		"_Else       _Set ret a;\n"
 		"_Return ret;\n"
@@ -435,8 +469,8 @@ PARSER_TEST(Selection_statement_if_elif_else) {
 
 	TestSelectionStatement("Same next next",
 		"_Func Max a b\n"
-		"_If a b >   _Set ret a;\n"
-		"_Elif a b <\n"
+		"_If a b >:   _Set ret a;\n"
+		"_Elif a b <:\n"
 		"    _Set ret b;\n"
 		"_Else\n"
 		"    _Set ret a;\n"
@@ -447,7 +481,7 @@ PARSER_TEST(Selection_statement_if_elif_else) {
 PARSER_TEST(Selection_statement_hanging_elif) {
 	auto par{GenerateTestingInstance()};
 	par.ParseLine("_Func DoesNotMatter a b");
-	ASSERT_ANY_THROW(par.ParseLine("_Elif a b < _List;"));
+	ASSERT_ANY_THROW(par.ParseLine("_Elif a b <: _List;"));
 }
 
 PARSER_TEST(Selection_statement_hanging_else) {
@@ -461,19 +495,19 @@ PARSER_TEST(Selection_statement_elif_after_else) {
 
 	// Same line else.
 	auto szCaseName{"Same line"};
-	optPar->ParseLine("_Func Max a b          ");
-	optPar->ParseLine("_If a b >   _Set ret a;");
-	optPar->ParseLine("_Else       _Set ret a;");
-	ASSERT_ANY_THROW(optPar->ParseLine("_Elif a b < _Set ret b;")) << szCaseName;
+	optPar->ParseLine("_Func Max a b           ");
+	optPar->ParseLine("_If a b >:   _Set ret a;");
+	optPar->ParseLine("_Else        _Set ret a;");
+	ASSERT_ANY_THROW(optPar->ParseLine("_Elif a b <: _Set ret b;")) << szCaseName;
 
 	// Next line else.
 	optPar.emplace(GenerateTestingInstance());
 	szCaseName = "Next line";
-	optPar->ParseLine("_Func Max a b          ");
-	optPar->ParseLine("_If a b >   _Set ret a;");
-	optPar->ParseLine("_Else                  ");
-	optPar->ParseLine("    _Set ret a;        ");
-	ASSERT_ANY_THROW(optPar->ParseLine("_Elif a b < _Set ret b;")) << szCaseName;
+	optPar->ParseLine("_Func Max a b           ");
+	optPar->ParseLine("_If a b >:   _Set ret a;");
+	optPar->ParseLine("_Else                   ");
+	optPar->ParseLine("    _Set ret a;         ");
+	ASSERT_ANY_THROW(optPar->ParseLine("_Elif a b <: _Set ret b;")) << szCaseName;
 }
 
 PARSER_TEST(Selection_statement_multiple_else_s) {
@@ -482,18 +516,150 @@ PARSER_TEST(Selection_statement_multiple_else_s) {
 	// Same line else.
 	auto szCaseName{"Same line"};
 	optPar->ParseLine("_Func Max a b          ");
-	optPar->ParseLine("_If a b >   _Set ret a;");
-	optPar->ParseLine("_Else       _Set ret a;");
-	ASSERT_ANY_THROW(optPar->ParseLine("_Else      _Set ret b; ")) << szCaseName;
+	optPar->ParseLine("_If a b >:   _Set ret a;");
+	optPar->ParseLine("_Else        _Set ret a;");
+	ASSERT_ANY_THROW(optPar->ParseLine("_Else       _Set ret b; ")) << szCaseName;
 
 	// Next line else.
 	optPar.emplace(GenerateTestingInstance());
 	szCaseName = "Next line";
-	optPar->ParseLine("_Func Max a b        ");
-	optPar->ParseLine("_If a b > _Set ret a;");
-	optPar->ParseLine("_Else                ");
-	optPar->ParseLine("    _Set ret a;      ");
-	ASSERT_ANY_THROW(optPar->ParseLine("_Else     _Set ret b;")) << szCaseName;
+	optPar->ParseLine("_Func Max a b         ");
+	optPar->ParseLine("_If a b >: _Set ret a;");
+	optPar->ParseLine("_Else                 ");
+	optPar->ParseLine("    _Set ret a;       ");
+	ASSERT_ANY_THROW(optPar->ParseLine("_Else      _Set ret b;")) << szCaseName;
+}
+
+PARSER_TEST(Multiple_returns_and_branching) {
+	for (auto const i : view::iota(0U, 7U)) {
+		auto par{GenerateTestingInstance()};
+
+		using namespace std::string_literals;
+		par.ParseLine("_Func Sign n;");
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   "s 
+			+ ((i & 1) ? "_Return  1;" : "_Set ret  1;"))) << i;
+		ASSERT_TRUE(par.IsParsingFunction()) << i;
+
+		ASSERT_NO_THROW(par.ParseLine("_Elif n 0 <: "s 
+			+ ((i & 2) ? "_Return -1;" : "_Set ret -1;"))) << i;
+		ASSERT_TRUE(par.IsParsingFunction()) << i;
+
+		ASSERT_NO_THROW(par.ParseLine("_Else        "s 
+			+ ((i & 4) ? "_Return  0;" : "_Set ret  0;"))) << i;
+		ASSERT_TRUE(par.IsParsingFunction()) << i;
+
+		ASSERT_NO_THROW(par.ParseLine("_Return ret;")) << i;
+		ASSERT_FALSE(par.IsParsingFunction()) << i;
+
+		par.ParseLine("-1 Sign;");
+		ASSERT_DOUBLE_EQ(-1.0, par.GetLitMan().GetLast());
+
+		par.ParseLine("0 Sign;");
+		ASSERT_DOUBLE_EQ(0.0, par.GetLitMan().GetLast());
+
+		par.ParseLine("1 Sign;");
+		ASSERT_DOUBLE_EQ(1.0, par.GetLitMan().GetLast());
+	}
+}
+
+PARSER_TEST(Different_return_types_and_branching) {
+	// [_Return;] = 1, [_Return n;] = 0
+	/* 1, 5 */ {
+		auto par{GenerateTestingInstance()};
+		par.ParseLine("_Func Sign n;");
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   _Return;"));
+		ASSERT_ANY_THROW(par.ParseLine("_Elif n 0 <: _Return -1;"));
+	}
+
+	/* 2, 6 */ {
+		auto par{GenerateTestingInstance()};
+		par.ParseLine("_Func Sign n;");
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   _Return -1;"));
+		ASSERT_ANY_THROW(par.ParseLine("_Elif n 0 <: _Return;"));
+	}
+
+	/* 3 */ {
+		auto par{GenerateTestingInstance()};
+		par.ParseLine("_Func Sign n;");
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   _Return;"));
+		ASSERT_NO_THROW(par.ParseLine("_Elif n 0 <: _Return;"));
+		ASSERT_ANY_THROW(par.ParseLine("Else         _Return 0;"));
+	}
+	
+	/* 4 */ {
+		auto par{GenerateTestingInstance()};
+		par.ParseLine("_Func Sign n;");
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   _Return 1;"));
+		ASSERT_NO_THROW(par.ParseLine("_Elif n 0 <: _Return -1;"));
+		ASSERT_ANY_THROW(par.ParseLine("Else         _Return;"));
+	}
+
+	/* Mutliple elifs (same as 4) */ {
+		auto par{GenerateTestingInstance()};
+		par.ParseLine("_Func Sign n;");
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:     _Return 1;"));
+		ASSERT_NO_THROW(par.ParseLine("_Elif n 0 <:   _Return -1;"));
+		ASSERT_ANY_THROW(par.ParseLine("_Elif n 0 ==: _Return;"));
+	}
+}
+
+PARSER_TEST(Different_return_types_one_in_branch_one_is_not) {
+	/* Number then none */ {
+		auto par{GenerateTestingInstance()};
+		ASSERT_NO_THROW(par.ParseLine("_Func MyFunc n;"));
+		ASSERT_TRUE(par.IsParsingFunction());
+
+		ASSERT_NO_THROW(par.ParseLine("    _If n 10 <: _Return 10;"));
+		ASSERT_TRUE(par.IsParsingFunction());
+
+		ASSERT_ANY_THROW(par.ParseLine("_Return;"));
+	}
+
+	/* None then number */ {
+		auto par{GenerateTestingInstance()};
+		ASSERT_NO_THROW(par.ParseLine("_Func MyFunc n;"));
+		ASSERT_TRUE(par.IsParsingFunction());
+
+		ASSERT_NO_THROW(par.ParseLine("    _If n 10 <: _Return;"));
+		ASSERT_TRUE(par.IsParsingFunction());
+
+		ASSERT_ANY_THROW(par.ParseLine("_Return 10;"));
+	}
+}
+
+PARSER_TEST(Selection_statement_multiple_decoder_using_multiple_returns) {
+	auto par{GenerateTestingInstance()};
+	par.ParseLine("_Func ExecuteOpCode code a b");
+	CHECK_ASSERT_NO_THROW(par.ParseLine("_If   code 0 ==: _Return a b +;"));
+	ASSERT_TRUE(par.IsParsingFunction());
+
+	ASSERT_NO_THROW(par.ParseLine("_Elif code 1 ==: _Return a b -;"));
+	ASSERT_TRUE(par.IsParsingFunction());
+
+	ASSERT_NO_THROW(par.ParseLine("_Elif code 2 ==: _Return a b *;"));
+	ASSERT_TRUE(par.IsParsingFunction());
+
+	ASSERT_NO_THROW(par.ParseLine("_Elif code 3 ==: _Return a b /;"));
+	ASSERT_TRUE(par.IsParsingFunction());
+
+	ASSERT_NO_THROW(par.ParseLine("_Else            _Return _inf;"));
+	ASSERT_FALSE(par.IsParsingFunction());
+
+	constexpr auto ExecuteOpCode = [](auto code, auto a, auto b) constexpr {
+		if (code == 0.0)      { return a + b; }
+		else if (code == 1.0) { return a - b; }
+		else if (code == 2.0) { return a * b; }
+		else if (code == 3.0) { return a / b; }
+		else                  { return std::numeric_limits<double>::infinity(); }
+	};
+
+	for (auto const code : view::iota(-1, 10)) {
+		constexpr auto A{-5.0};
+		constexpr auto B{15.0};
+		par.ParseLine(std::format("{} {} {} ExecuteOpCode;", code, A, B));
+		ASSERT_DOUBLE_EQ(ExecuteOpCode(code, A, B), par.GetLitMan().GetLast())
+			<< std::format("Code was {:d}", code);
+	}
 }
 
 PARSER_TEST(Serializing_a_constant) {

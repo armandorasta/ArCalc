@@ -34,9 +34,15 @@ namespace ArCalc::Str {
 		}
 
 		std::vector<TReturn> res{};
-		size_t il{}, ir{};
+
+		// Skip the separators at the begining.
+		auto ir = size_t{};
+		for (; ir < str.size() && range::any_of(chars, Util::Eq(str[ir])); ++ir)
+			;
+
+		auto il{ir};
 		for (; ir < str.size(); ++ir) {
-			if (range::none_of(chars, [&](auto c) { return str[ir] == c; })) {
+			if (range::none_of(chars, Util::Eq(str[ir]))) {
 				continue;
 			}
 
@@ -45,12 +51,13 @@ namespace ArCalc::Str {
 				// Setting this to false will insert an empty token in between each two 
 				// consecutive delimeters, otherwise the function will remove that token.
 
-				while (ir < str.size() && range::any_of(chars, Util::Eq(str[ir]))) {
-					ir += 1;
-				}
+				for (; ir < str.size() && range::any_of(chars, Util::Eq(str[ir])); ++ir)
+					;
+
 				il = ir;
+			} else {
+				il = ir + 1; // Do not increment ir ffs.
 			}
-			else il = ir + 1; // Do not increment ir ffs.
 		}
 		if (il != str.size()) { // So it does not push an empty token for the sake of it.
 			res.push_back(TReturn{str.substr(il, ir - il)});
@@ -147,7 +154,7 @@ namespace ArCalc::Str {
 		ValueType resNum{};
 		auto const res{std::from_chars(str.data(), str.data() + str.size(), resNum)};
 		if (auto const [ptr, code] {res}; code != std::errc{}) {
-			throw ArCalcException{
+			throw GenericError{
 				"Invalid Argument; found invalid character [{}] at index [{}]",
 				*ptr, ptr - str.data()
 			};

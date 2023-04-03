@@ -9,6 +9,7 @@
 #include <Util/Str.cpp>
 #include <Util/IO.cpp>
 #include <Util/Random.cpp>
+#include <Exception/ArCalcException.cpp>
 
 // Source/
 #include <Parser.cpp>

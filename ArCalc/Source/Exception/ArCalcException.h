@@ -5,7 +5,7 @@
 namespace ArCalc {
 	class ArCalcException {
 	public:
-		ArCalcException() : ArCalcException{"No message"} {}
+		ArCalcException();
 
 		template <class... FormatArgs>
 		ArCalcException(std::string_view message, FormatArgs&&... fmtArgs) {
@@ -14,9 +14,10 @@ namespace ArCalc {
 		}
 
 	public:
-		std::string GetMessage() const noexcept {
-			return std::format("({}): {}", GetLineNumber(), m_Message);
-		}
+		virtual std::string GetType() const = 0;
+
+		void PrintMessage(std::string_view indent) const;
+		std::string const& GetMessage() const noexcept;
 
 		template <class... FormatArgs>
 		void SetMessage(std::string_view newMessage, FormatArgs&&... fmtArgs) {
@@ -25,11 +26,11 @@ namespace ArCalc {
 				std::make_format_args(std::forward<FormatArgs>(fmtArgs)...));
 		}
 
-		constexpr size_t GetLineNumber() const {
+		constexpr size_t GetLineNumber() const noexcept {
 			return m_LineNumber;
 		}
 
-		constexpr bool SetLineNumber(size_t toWhat) {
+		constexpr bool SetLineNumber(size_t toWhat) noexcept {
 			if (!bLineNumberSet) { 
 				m_LineNumber = toWhat; 
 				return true;
@@ -38,7 +39,7 @@ namespace ArCalc {
 			return false; 
 		}
 
-		constexpr void LockNumberLine() {
+		constexpr void LockNumberLine() noexcept {
 			bLineNumberSet = true;
 		}
 
@@ -68,6 +69,10 @@ namespace ArCalc {
 				)
 			);
 		}
+
+		std::string GetType() const override {
+			return "DA";
+		}
 	};
 
 	/// Thrown when an evaluator is passed an invalid expression.
@@ -76,30 +81,54 @@ namespace ArCalc {
 	class ExprEvalError : public ArCalcException {
 	public:
 		using ArCalcException::ArCalcException;
+		std::string GetType() const override {
+			return "EE";
+		}
 	};
 
 	/// Used by functions in the IO header.
 	class IOError : public ArCalcException {
 	public:
 		using ArCalcException::ArCalcException;
+		std::string GetType() const override {
+			return "IO";
+		}
 	};
 
-	/// Thrown by parser when an error other than a syntax error happens.
+	/// Thrown by Parser and all evaluators when an error other than a syntax error happens.
 	class ParseError : public ArCalcException {
 	public:
 		using ArCalcException::ArCalcException;
+		std::string GetType() const override {
+			return "P";
+		}
 	};
 
 	/// Thrown by Parser and all evaluators.
 	class SyntaxError : public ArCalcException {
 	public:
 		using ArCalcException::ArCalcException;
+		std::string GetType() const override {
+			return "S";
+		}
 	};
 
 	/// Thrown by the MathOperator class.
 	class MathError : public ArCalcException {
 	public:
 		using ArCalcException::ArCalcException;
+		std::string GetType() const override {
+			return "M";
+		}
+	};
+
+	/// Thrown by functions can't throw any of the other types of errors.
+	class GenericError : public ArCalcException {
+	public:
+		using ArCalcException::ArCalcException;
+		std::string GetType() const override {
+			return "G";
+		}
 	};
 }
 
@@ -115,9 +144,12 @@ namespace ArCalc {
 #else // ^^^^ Release, vvvv Debug
 
 /// ArCalc Debug Assert.
-#define ARCALC_DA(_cond, _message, ...) \
-	if (!(_cond)) throw ::ArCalc::DebugAssertionError{__FILE__, __FUNCTION__, static_cast<::ArCalc::size_t>(__LINE__), _message, __VA_ARGS__}
-
+#define ARCALC_DA(_cond, _message, ...)                                      \
+	if (!(_cond))                                                            \
+		throw ::ArCalc::DebugAssertionError{                                 \
+			__FILE__, __FUNCTION__, static_cast<::ArCalc::size_t>(__LINE__), \
+			_message, __VA_ARGS__                                            \
+		}
 
 /// ArCalc Debug Error.
 #define ARCALC_DE(_message, ...) ARCALC_DA(false, _message, __VA_ARGS__)
@@ -129,7 +161,6 @@ namespace ArCalc {
 	ARCALC_DE("Program managed to flow through an unreachable code path")
 
 #define ARCALC_NOT_IMPLEMENTED(_whatIsNotImplemented) \
-		ARCALC_DE("Program managed to flow through a code path not implemented yet: " _whatIsNotImplemented);
-
+	ARCALC_DE("Program managed to flow through a code path not implemented yet: " _whatIsNotImplemented);
 
 #endif // NDEBUG

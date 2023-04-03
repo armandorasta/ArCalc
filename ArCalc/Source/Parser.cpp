@@ -6,21 +6,45 @@
 #include "Util/Str.h"
 #include "Util/IO.h"
 #include "Util/MathConstant.h"
+#include "Util/MathOperator.h"
 
 namespace ArCalc {
+	// Used during validation of function bodies.
+	constexpr size_t ValidationBit{1U << 31}; 
+
+	// Used during NOT validation of function bodies
+	constexpr size_t ExecutionBit {1U << 30}; 
+
+	// Used for selection statements. 
+	// There are 4 of these, but they should have been 6.
+	constexpr size_t SelectionBit {1U << 29}; 
+
 	enum class Parser::St : size_t {
 		// Rest.
 		Default = 0U,
 
 		// Function validation.
-		Val_LineCollection,
-		Val_SubParser,
-		Val_SelectionNewLine,
+		Val_LineCollection = ValidationBit | 1,
+		Val_SubParser      = ValidationBit | 2,
+		Val_IfElifNewLine  = ValidationBit | SelectionBit | 1,
+		Val_ElseNewLine    = ValidationBit | SelectionBit | 2,
 
 		// Selections statements.
-		SelectionNewLine,
+		IfElifNewLine      = ExecutionBit | SelectionBit | 1,
+		ElseNewLine        = ExecutionBit | SelectionBit | 2,
 	};
 
+	bool Parser::IsExecSt(St st) {
+		return static_cast<std::underlying_type_t<St>>(st) & ExecutionBit;
+	}
+
+	bool Parser::IsValSt(St st) {
+		return static_cast<std::underlying_type_t<St>>(st) & ValidationBit;
+	}
+
+	bool Parser::IsSelSt(St st) {
+		return static_cast<std::underlying_type_t<St>>(st) & SelectionBit;
+	}
 
 	Parser::Parser(std::ostream& os) 
 		: m_CurrState{St::Default}, m_pOutStream{&os}, m_FunMan{os}, m_LitMan{os}
@@ -49,8 +73,7 @@ namespace ArCalc {
 				} 
 				else m_LitMan.Add(param.GetName(), 0.f);
 			}
-		} 
-		else for (auto const& param : paramData) {
+		} else for (auto const& param : paramData) {
 			if (param.IsPassedByRef()) {
 				m_LitMan.Add(param.GetName(), param.GetRef());
 			} else {
@@ -69,22 +92,18 @@ namespace ArCalc {
 	}
 
 	void Parser::ParseFile(fs::path const& filePath) {
-		std::ifstream file{filePath};
-		if (!file.is_open()) {
-			throw ParseError{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
+		if (std::ifstream file{filePath}; file.is_open()) {
+			ParseIStream(file);
 		}
-
-		ParseIStream(file);
+		else throw ParseError{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
 	}
 
 	void Parser::ParseFile(fs::path const& filePath, fs::path const& outFilePath) {
-		std::ifstream file{filePath};
-		if (!file.is_open()) {
-			throw ParseError{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
+		if (std::ifstream file{filePath}; !file.is_open()) {
+			std::ofstream outFile{outFilePath};
+			ParseIStream(file, outFile);
 		}
-
-		std::ofstream outFile{outFilePath};
-		ParseIStream(file, outFile);
+		else throw ParseError{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
 	}
 
 	void Parser::ParseIStream(std::istream& is) {
@@ -102,6 +121,7 @@ namespace ArCalc {
 
 	void Parser::ParseLine(std::string_view line) {
 		IncrementLineNumber();
+		m_bJustHitReturn = {}; // Reset the return statement flag.
 
 		m_CurrentLine = Str::Trim<std::string_view>(line);
 		m_bSemiColon = !m_CurrentLine.empty() && (m_CurrentLine.back() == ';');
@@ -121,17 +141,28 @@ namespace ArCalc {
 			AddFunctionLine();
 			break;
 		}
-		case St::SelectionNewLine:
-		case St::Val_SelectionNewLine: {
+		case St::IfElifNewLine:
+		case St::Val_IfElifNewLine: {
 			if (m_CurrentLine.empty()) {
 				break;
 			}
-			
-			HandleConditionalBody(state == St::Val_SelectionNewLine 
+
+			HandleConditionalBody(KeywordType::If, state == St::Val_IfElifNewLine 
 				|| !m_bSelectionBlockExecuted 
 				   && m_bConditionRegister.value_or(true)); // _Else == _Elif 1 (not exactly tho)
 			break;
 		}
+		case St::ElseNewLine:
+		case St::Val_ElseNewLine: {
+			if (m_CurrentLine.empty()) {
+				break;
+			}
+
+			HandleConditionalBody(KeywordType::Else, state == St::Val_IfElifNewLine 
+				|| !m_bSelectionBlockExecuted 
+				   && m_bConditionRegister.value_or(true)); // _Else == _Elif 1 (not exactly tho)
+			break;
+		}		
 		case St::Val_SubParser:
 		default: {
 			if (m_CurrentLine.empty()) {
@@ -157,10 +188,16 @@ namespace ArCalc {
 	}
 
 	bool Parser::IsParsingSelectionStatement() const {
-		return GetState() == St::Val_SelectionNewLine; 
+		return m_pValidationSubParser // Validating the function body while parsing?
+			&& IsSelSt(m_pValidationSubParser->GetState());
 	}
 
-	std::optional<double> Parser::GetReturnValue([[maybe_unused]] FuncReturnType retype) {
+#ifdef NDEBUG
+	std::optional<double> Parser::GetReturnValue([[maybe_unused]] FuncReturnType retype) 
+#else // ^^^^ Release, vvvv Debug.
+	std::optional<double> Parser::GetReturnValue(FuncReturnType retype) 
+#endif
+	{
 #ifndef NDEBUG // retype is not checked in Release.
 		if (retype == FuncReturnType::None && m_ReturnValueRegister.has_value()) {
 			throw ParseError{
@@ -212,12 +249,25 @@ namespace ArCalc {
 
 	void Parser::HandleSetKeyword() {
 		auto const state{GetState()}; 
-		ARCALC_NOT_POSSIBLE(!(state == St::Default || state == St::Val_SubParser));
-
+		ARCALC_NOT_POSSIBLE(state != St::Default && state != St::Val_SubParser && !IsSelSt(state));
 		KeywordDebugDoubleCheck(Str::ChopFirstToken<std::string_view>(m_CurrentLine), KeywordType::Set);
 
-		auto const name{Str::ChopFirstToken<std::string_view>(m_CurrentLine)};
-		ExpectIdentifier(name);
+		auto const litName{Str::ChopFirstToken<std::string_view>(m_CurrentLine)};
+		ExpectIdentifier(litName);
+
+		if (MathConstant::IsValid(litName) ||
+			MathOperator::IsValid(litName) ||
+			m_FunMan.IsDefined(litName)) 
+		{
+			throw SyntaxError{
+				"Can not define a literal with the name {}, "
+				"because {} with that name already exists.",
+				MathConstant::IsValid(litName) ? "a math constant" : 
+				MathOperator::IsValid(litName) ? "an operator" : 
+				                                 "you have already defined a function",
+				litName,
+			};
+		} 
 
 		auto const value = [&] {
 			if (auto const opt{Eval(m_CurrentLine)}; opt.has_value()) {
@@ -225,33 +275,42 @@ namespace ArCalc {
 			} else throw ParseError{
 				"Setting literal [{}] to an expression returns none.\n"
 				"The expression was most probably a function returns None",
-				name
+				litName
 			};
 		}();
 
-		if (m_LitMan.IsVisible(name)) { *m_LitMan.Get(name) = value; } 
-		else                          { m_LitMan.Add(name, value); }
+		if (m_LitMan.IsVisible(litName)) { *m_LitMan.Get(litName) = value; } 
+		else                             { m_LitMan.Add(litName, value); }
 
-		if (state == St::Default && !IsLineEndsWithSemiColon()) {
-			IO::Print(GetOStream(), "{} = {}\n", name, value);
+		if (!IsLineEndsWithSemiColon() && (state == St::Default || IsSelSt(state))) {
+			IO::Print(GetOStream(), "{} = {}\n", litName, value);
 		}
 	}
 
 	void Parser::HandleListKeyword() {
-		if (GetState() == St::Val_SubParser) {
+		if (auto const state{GetState()}; 
+			state == St::Val_SubParser || IsSelSt(state)) 
+		{
 			return;
 		}
 
 		auto const tokens{Str::SplitOnSpaces(m_CurrentLine)};
-		if (tokens.size() < 2) { m_LitMan.List(); }
-		else                   { m_LitMan.List(tokens[1]); }
+		IO::Output(GetOStream(), "{");
+		if (tokens.size() < 2) { 
+			m_LitMan.List();
+			m_FunMan.List();
+		} else { 
+			m_LitMan.List(tokens[1]); 
+			m_FunMan.List(tokens[1]);
+		}
+		IO::Output(GetOStream(), "\n}\n");
 	}
 
 	void Parser::HandleFuncKeyword() {
 		if (GetState() == St::Val_SubParser) {
 			throw SyntaxError{
 				"Found keyword [{}] in an invalid context (inside a function)", 
-				KeywordType::Func
+				KeywordType::Func,
 			};
 		}
 
@@ -269,11 +328,26 @@ namespace ArCalc {
 		// Function name
 		auto& funcName = tokens[1];
 		ExpectIdentifier(funcName);
+
+		if (MathConstant::IsValid(funcName) ||
+			MathOperator::IsValid(funcName) ||
+			m_LitMan.IsVisible(funcName)) 
+		{
+			throw SyntaxError{
+				"Can not define a function with the name {}, "
+				"because {} with that name already exists.",
+				MathConstant::IsValid(funcName) ? "a math constant" : 
+				MathOperator::IsValid(funcName) ? "an operator" : 
+				                                  "you have already defined a variable",
+				funcName,
+			};
+		} 
+
 		m_FunMan.BeginDefination(funcName, GetLineNumber());
 
 		if (tokens.size() == 2) {
 			throw ParseError{
-				"Expected at least one parameter after the name of the function, but found none"
+				"Expected at least one parameter after the name of the function, but found none.\n"
 				"{} [function name] [parameter list]",
 				KeywordType::Func
 			};
@@ -308,30 +382,47 @@ namespace ArCalc {
 		}
 
 		// Check function body for syntax errors.
-		m_pValidationSubParser = std::make_unique<Parser>(GetOStream(), m_FunMan.CurrParamData(), true);
+		m_pValidationSubParser = std::make_unique<Parser>(m_ValidationStringStream, m_FunMan.CurrParamData(), true);
 		m_pValidationSubParser->SetState(St::Val_SubParser);
 		SetState(St::Val_LineCollection);
 	}
 
 	void Parser::HandleReturnKeyword() {
-		switch (GetState()) {
+		auto currLine{m_CurrentLine}; // The actual view need not be touched.
+		KeywordDebugDoubleCheck(Str::ChopFirstToken<std::string_view>(currLine), KeywordType::Return);
+		m_bJustHitReturn = true;
+
+		auto const state{GetState()}; 
+		m_bFuncMustExist = (state == St::Val_SubParser);
+
+		if (IsValSt(state)) {
+			auto const currReturnType = 
+				currLine.empty() ? FuncReturnType::None : FuncReturnType::Number;
+
+			if (!m_ReturnTypeRegister) {
+				m_ReturnTypeRegister = currReturnType;
+			} else if (currReturnType != m_ReturnTypeRegister) {
+				throw SyntaxError{
+					"Different return types; expected {} but found {}",
+					*m_ReturnTypeRegister, currReturnType
+				};
+			}
+		}
+
+		switch (state) {
 		case St::Default: {
 			if (!IsExecutingFunction()) {
 				throw SyntaxError{"Found {} in global scope", KeywordType::Return};
 			}
 
-			KeywordDebugDoubleCheck(Str::ChopFirstToken(m_CurrentLine), KeywordType::Return);
-
-			if (m_CurrentLine.empty()) { m_ReturnValueRegister = {}; } 
-			else                       { m_ReturnValueRegister = Eval(m_CurrentLine); }
+			if (currLine.empty()) { m_ReturnValueRegister = {}; } 
+			else                  { m_ReturnValueRegister = Eval(currLine); }
 
 			break;
 		}
 		case St::Val_SubParser: {
-			ExpectKeyword(Str::ChopFirstToken(m_CurrentLine), KeywordType::Return);
-
-			if (!m_CurrentLine.empty()) {
-				Eval(m_CurrentLine); // Just make sure no exception is thrown.
+			if (!currLine.empty()) {
+				Eval(currLine); // Just make sure no exception is thrown.
 			}
 			
 			break;
@@ -341,18 +432,15 @@ namespace ArCalc {
 	}
 
 	void Parser::AddFunctionLine() {
-		// TODO: Handle end of function more generally.
 		ARCALC_NOT_POSSIBLE(GetState() != St::Val_LineCollection);
 
-		if (IsLineEndsWithSemiColon()) {
-			m_FunMan.AddCodeLine(std::string{m_CurrentLine} + ";");
-		} else {
-			m_FunMan.AddCodeLine(m_CurrentLine);
-		}
-		if (auto const retKW{Keyword::ToString(KeywordType::Return)}; m_CurrentLine.starts_with(retKW)) {
-			// This is a hack, it depends on AddFunctionLine being called after the line is trimmed.
-			m_FunMan.SetReturnType(m_CurrentLine.size() > retKW.size() ? FuncReturnType::Number 
-				                                                       : FuncReturnType::None);
+		m_FunMan.AddCodeLine(std::string{m_CurrentLine} + (IsLineEndsWithSemiColon() ? ";" : ""));
+
+		if (auto& subParser{*m_pValidationSubParser}; subParser.m_bFuncMustExist) {
+			ARCALC_NOT_POSSIBLE(!subParser.m_ReturnTypeRegister);
+			m_FunMan.SetReturnType(*subParser.m_ReturnTypeRegister);
+			subParser.m_ReturnTypeRegister = {};
+
 			m_FunMan.EndDefination();
 			SetState(St::Default);
 			m_pValidationSubParser.reset();
@@ -362,20 +450,29 @@ namespace ArCalc {
 	void Parser::HandleSelectionKeyword() {
 		if (!IsExecutingFunction()) {
 			// The flag must be turned on when creating the sub-parser for validation as well!!!
-			throw ParseError{"Found selection statement in global scope"};
+			throw SyntaxError{"Found selection statement in global scope"};
 		}
-		auto const state{GetState()};
 
-		switch (auto const keyword{*Keyword::FromString(Str::ChopFirstToken(m_CurrentLine))}; keyword) {
+		auto const state{GetState()};
+		auto const keyword{*Keyword::FromString(Str::ChopFirstToken(m_CurrentLine))};
+		if (IsSelSt(state)) {
+			throw SyntaxError{
+				"Found selection keyword [{}] inside a selection statement.\n"
+				"Selection statements may not be nested inside one another",
+				keyword,
+			};
+		}
+
+		switch (keyword) {
 		case KeywordType::Elif:
 			if (!m_bConditionRegister.has_value()) {
-				throw ParseError{"Found a hanging [{}] keyword", keyword};
+				throw SyntaxError{"Found a hanging [{}] keyword", keyword};
 			}
 			[[fallthrough]];
 		case KeywordType::If: {
 			ARCALC_NOT_POSSIBLE(!(state == St::Default || state == St::Val_SubParser));
 
-			auto const [cond, statement] {ParseConditionalHeader(m_CurrentLine)};
+			auto const [cond, statement] {ParseConditionalHeader(keyword, m_CurrentLine)};
 			if (cond.empty()) {
 				throw ParseError{
 					"Expected a condition after keyword [{}], but found nothing", 
@@ -383,93 +480,111 @@ namespace ArCalc {
 				};
 			}
 
-			if (auto const opt{Eval(cond)}; opt.has_value()) {
-				m_bConditionRegister = std::abs(*opt - 0.0) > 0.000001;
+			if (auto const opt{Eval(cond)}; opt) {
+				m_bConditionRegister = std::abs(*opt) > 0.000001;
 			}
-			else throw ParseError{"Found expression returns none in condition"};
+			else throw SyntaxError{"Found expression returns none in condition"};
 
 			if (statement.empty()) {
-				SetState(state == St::Default ? St::SelectionNewLine 
-				                              : St::Val_SelectionNewLine);
+				SetState(state == St::Default ? St::IfElifNewLine 
+				                              : St::Val_IfElifNewLine);
 			} else {
 				m_CurrentLine = statement;
-				HandleConditionalBody(state == St::Val_SubParser || *m_bConditionRegister); 
+				HandleConditionalBody(keyword, state == St::Val_SubParser || *m_bConditionRegister); 
 			}
 
 			break;
 		}
 		case KeywordType::Else: {
 			ARCALC_NOT_POSSIBLE(!(state == St::Default || state == St::Val_SubParser));
+			auto const [cond, statement] {ParseConditionalHeader(keyword, m_CurrentLine)};
+			
 			if (!m_bConditionRegister.has_value()) {
-				throw ParseError{"Found a hanging [{}] keyword", keyword};
+				throw SyntaxError{"Found a hanging [{}] keyword", keyword};
 			}
 			m_bConditionRegister.reset(); // This disallows any elif's after this branch.
 
 			if (m_CurrentLine.empty()) {
-				SetState(state == St::Default ? St::SelectionNewLine 
-											  : St::Val_SelectionNewLine);
+				SetState(state == St::Default ? St::ElseNewLine 
+											  : St::Val_ElseNewLine);
+			} else {
+				m_CurrentLine = statement;
+				HandleConditionalBody(keyword, state == St::Val_SubParser || !m_bSelectionBlockExecuted);
 			}
-			else HandleConditionalBody(state == St::Val_SubParser || !m_bSelectionBlockExecuted);
 			break;
 		}
 		default: ARCALC_UNREACHABLE_CODE();
 		}
 	}
 
-	void Parser::HandleConditionalBody(bool bExecute) {
+	void Parser::HandleConditionalBody(KeywordType selKW, bool bExecute) {
 		auto const state{GetState()}; // This cache is necessary!!!
-		ARCALC_NOT_POSSIBLE(!( state == St::Default       || state == St::SelectionNewLine
-							|| state == St::Val_SubParser || state == St::Val_SelectionNewLine));
+		ARCALC_NOT_POSSIBLE(!(state == St::Default 
+		                   || state == St::Val_SubParser 
+		                   || IsSelSt(state)));
+		
+		// indicates that the current statement is a return statement.
+		auto const bReturn{m_CurrentLine.starts_with(Keyword::ToString(KeywordType::Return))};
+		if (selKW == KeywordType::If) {
+			m_bAllOtherBranchesReturned = bReturn; // Starts the chain.
+		} else {
+			m_bAllOtherBranchesReturned &= bReturn;
+		}
 
 		if (bExecute) {
 			m_bSelectionBlockExecuted = true;
-			//SetState(St::Default); // Reset the state so the statement executes without any problems.
 			HandleFirstToken();
 		}
 
+		m_bFuncMustExist = (state == St::Val_SubParser || IsSelSt(state)) 
+		                 && m_bAllOtherBranchesReturned 
+		                 && selKW == KeywordType::Else;
+
 		SetState([&] {
 			switch (state) {
-			case St::SelectionNewLine:     return St::Default;
-			case St::Val_SelectionNewLine: return St::Val_SubParser;
-			default:                       return state;
+			case St::IfElifNewLine:
+			case St::ElseNewLine: 
+				return St::Default;
+			case St::Val_IfElifNewLine:
+			case St::Val_ElseNewLine:
+				return St::Val_SubParser;
+			default:
+				return state;
 			}
 		}(/*)(*/));
-
-		/*
-
-			TODO: Add return keyword.
-
-		*/
 	}
 
-	Parser::ConditionAndStatement Parser::ParseConditionalHeader(std::string_view header) {
-		// The condition ends when a keyword not valid in the middle of the header is found, 
-		// however, some keywords are not valid inside an if statement in general, the 
-		// condition stops when it finds these keywords as well and puts out a helpful error 
-		// message.
-
-		// TODO: add the python colon after an if and elif condition, make it optional 
-		//       for else blocks, I mean, just look at this bullshit.
-		for (static auto const sc_AllKeywordTypes{Keyword::GetAllKeywordTypes()}; 
-			auto const kw : sc_AllKeywordTypes) 
-		{
-			if (auto condEndIndex{header.find(Keyword::ToString(kw))}; 
-				condEndIndex != std::string::npos) 
-			{
-				if (kw != KeywordType::Set && kw != KeywordType::List) {
-					throw ParseError{
-						"Found keyword [{}] in an invalid context (inside a condition)", kw
-					};
-				}
-
-				return {
-					.Condition{header.substr(0, condEndIndex)},
-					.Statement{header.substr(condEndIndex)}
+	Parser::ConditionAndStatement Parser::ParseConditionalHeader(KeywordType selKW, std::string_view header) {
+		switch (selKW) {
+		case KeywordType::If:
+		case KeywordType::Elif: {
+			if (auto const colonIndex{header.find(':')}; colonIndex == std::string::npos) {
+				throw SyntaxError{
+					"Expected a `:` terminating condition.\n"
+					"[_if / _Elif] [condition]: [body]",
 				};
-			}
-		}
+			} else if (colonIndex + 1 == header.size()) { // Statement is next line.
+				return {
+					.Condition{header.substr(0, colonIndex)},
+					.Statement{},
+				};
+			} else return { // Inline statement.
+				.Condition{header.substr(0, colonIndex)},
+				.Statement{Str::TrimLeft<std::string_view>(header.substr(colonIndex + 1))},
+			};
 
-		return {.Condition{header}, .Statement{}};
+			break;
+		}
+		case KeywordType::Else: {
+			return { // Inline statement.
+				.Condition{},
+				.Statement{Str::TrimLeft<std::string_view>(header)},
+			};
+		}
+		default: 
+			ARCALC_UNREACHABLE_CODE();
+			return {};
+		}
 	}
 
 	void Parser::HandleSaveKeyword() {
@@ -546,7 +661,9 @@ namespace ArCalc {
 
 	void Parser::HandleNormalExpression() {
 		auto const state{GetState()};
-		ARCALC_NOT_POSSIBLE(!(state == St::Default || state == St::Val_SubParser));
+		ARCALC_NOT_POSSIBLE(!(state == St::Default 
+		                   || state == St::Val_SubParser 
+		                   || IsSelSt(state)));
 
 		auto const opt{Eval(m_CurrentLine)};
 		if (state == St::Default) {
@@ -565,8 +682,12 @@ namespace ArCalc {
 		}
 	}
 
+#ifdef NDEBUG
 	void Parser::KeywordDebugDoubleCheck([[maybe_unused]] std::string_view glyph, 
 		[[maybe_unused]] KeywordType what) 
+#else // ^^^^ Release, vvvv Debug.
+	void Parser::KeywordDebugDoubleCheck(std::string_view glyph, KeywordType what) 
+#endif
 	{
 #ifndef NDEBUG
 		return ExpectKeyword(glyph, what);

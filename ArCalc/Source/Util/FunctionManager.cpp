@@ -171,7 +171,7 @@ namespace ArCalc {
 		if (auto const it{range::find(m_CurrFuncData.Params, paramNameOwned, &ParamData::GetName)};
 			it != m_CurrFuncData.Params.end())
 		{
-			throw ArCalcException{
+			throw SyntaxError{
 				"Error: Adding function with doublicate parameter name [{}]", paramName
 			};
 		}
@@ -207,9 +207,13 @@ namespace ArCalc {
 		auto subParser = Parser{m_OStream, func.Params, false};
 		for (auto const& codeLine : func.CodeLines) {
 			subParser.ParseLine(codeLine);
+			if (subParser.IsCurrentStatementReturning()) {
+				return subParser.GetReturnValue(func.ReturnType);
+			}
 		}
 
-		return subParser.GetReturnValue(func.ReturnType);
+		ARCALC_UNREACHABLE_CODE();
+		return {};
 	}
 
 	void FunctionManager::Serialize(std::string_view name, std::ostream& os) {
@@ -217,7 +221,7 @@ namespace ArCalc {
 		// [return type: 0 for None, 1 for Number] [line count] { [line of code]... }
 
 		if (!IsDefined(name)) {
-			throw ArCalcException{"Serializing undefined function [{}]", name};
+			throw SyntaxError{"Serializing undefined function [{}]", name};
 		} 
 
 		// Name and parameter count.
@@ -296,4 +300,38 @@ namespace ArCalc {
 		// Functions with the same names will be overriden.
 		m_FuncMap.insert_or_assign(funcName, func); 
 	}
+
+	void FunctionManager::List(std::string_view prefix) const {
+		for (auto const& [name, data] : m_FuncMap) {
+			if (name.starts_with(prefix)) {
+				auto funcSig = std::string{name} + "(";
+				for (auto it{data.Params.begin()}; it < data.Params.end(); ++it) {
+					funcSig.append(it->GetName());
+					if (std::next(it) != data.Params.end()) {
+						funcSig.append(", ");
+					}
+				}
+				funcSig.append(")");
+
+				IO::Print(m_OStream, "\n    {}", funcSig);
+			}
+		}
+	}
 }
+
+/*
+for (auto const& [name, data] : m_FuncMap) {
+if (name.starts_with(prefix)) {
+auto funcSig = std::string{name} + "(";
+for (auto it{data.Params.begin()}; it < data.Params.end(); ++it) {
+funcSig.append(it->GetName());
+if (std::next(it) != data.Params.end()) {
+funcSig.append(", ");
+}
+}
+funcSig.append(")");
+
+IO::Print(m_OStream, "\n{}{}", Tab, funcSig);
+}
+}
+*/

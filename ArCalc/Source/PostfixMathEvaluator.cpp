@@ -14,8 +14,6 @@ namespace ArCalc {
 		ParsingIdentifier,
 
 		ParsingNumber,
-		FoundSingleQuote, 
-
 		ParsingOperator,
 	};
 
@@ -36,12 +34,19 @@ namespace ArCalc {
 
 		if (m_Values.Size() > 1) { 
 			throw ExprEvalError{
-				"Expression was not parsed completely; too many values are still on the stack"
+				"Incomplete eval: {{ {}}}", [this] {
+					for (auto stackStr = std::string{};;) {
+						stackStr = std::to_string(*m_Values.Pop()) + ' ' + stackStr; 
+						if (m_Values.IsEmpty()) {
+							return stackStr;
+						}
+					}
+				}(/*)(*/)
 			};
 		} else if (m_Values.IsEmpty()) {
 			return {};
 		} 
-		else return m_Values.Pop().Deref();
+		else return *m_Values.Pop();
 	}
 
 	void PostfixMathEvaluator::Reset() {
@@ -55,8 +60,7 @@ namespace ArCalc {
 		case St::WhiteSpace:        ParseWhiteSpace(c); break;
 		case St::ParsingIdentifier: ParseIdentifier(c); break;
 		case St::ParsingOperator:   ParseSymbolicOperator(c); break;
-		case St::ParsingNumber:     
-		case St::FoundSingleQuote:  ParseNumber(c); break;
+		case St::ParsingNumber:     ParseNumber(c); break;
 		case St::FoundMinusSign:    ParseMinusSign(c); break;
 		}
 	}
@@ -118,53 +122,124 @@ namespace ArCalc {
 	}
 
 	void PostfixMathEvaluator::ParseNumber(char c) {
-		// Even something like '5PI' instead of '5 * PI' is not allowed for now.
-		if (std::isalpha(c)) {
-			throw ParseError{
-				"Found alphabetic character [{}] while parsing number.\n"
-				"Using the multiplication operator is mandatory", 
-				c
-			};
-		} else if (c == '_') {
-			throw ParseError{
-				"Found an underscore right after a number\n"
-				"Using the multiplication operator is mandatory", 
-			};
-		}
-
+#ifndef NDEBUG
 		auto const state{GetState()};
-		ARCALC_NOT_POSSIBLE(!(state == St::ParsingNumber || state == St::FoundSingleQuote));
+#endif // ^^^^ Variable is used in debug mode only.
+		ARCALC_NOT_POSSIBLE(state != St::ParsingNumber);
 
-		if (state == St::FoundSingleQuote) switch (c) {
-		case '.':
-			throw ExprEvalError{"Found a ' just before a floating point while parsing a number"};
-		case '\'':
-			throw ExprEvalError{ "Found two ' in a row while parsing a number"};
-		default: // One of the rare reachable ones.
-			SetState(St::ParsingNumber);
-			break; // Advised m_By K & R themselves.
-		}
-
-		if (std::isdigit(c)) {
+		if (std::isdigit(c) || 
+			c == 'e' ||  // For exponential notation.
+			c == '.' ||  // Floating point.
+			c == '\''||  // Single quotes are for readability 10000000 => 10'000'000.
+			c == '-')    // For negative exponents.
+		{
 			AddChar(c);
-		} else if (c == '.') {
-			if (range::distance(GetString() | view::filter(Util::Eq('.'))) > 0U) {
-				throw ExprEvalError{"Found a number with multiple floating points"};
-			}
-			AddChar(c);
-		} else if (c == '\'') { // Single quotes are for readability 10000000 => 10'000'000.
-			if (auto const acc{GetString()}; !acc.empty() && acc.back() == '.') {
-				throw ExprEvalError{"Found a ' right after a floating point while parsing a number"};
-			}
-
-			SetState(St::FoundSingleQuote); // To check for some errors later ^^^
-			return; // Ignore it.
+		} else if (std::isalpha(c)) {
+			throw ParseError{
+				"Found invalid character [{}] while parsing number [{}]",
+				c, GetString(),
+			};
 		} else {
 			// Finished parsing, evaluating...
-			m_Values.PushRValue(std::atof(GetString().c_str()));
+			auto const cleanNumberString{ValidateAndFixParsedNumber()};
+			m_Values.PushRValue(std::atof(cleanNumberString.c_str()));
 			ResetString();
 			ResetState(c);
 		}
+	}
+
+	std::string PostfixMathEvaluator::ValidateAndFixParsedNumber() {
+		auto numberString = std::string_view{GetString()}; 
+
+		auto res = std::string{};
+		if (numberString.front() == '-') {
+			numberString = numberString.substr(1);
+			res.push_back('-');
+		}
+
+		bool bFoundE{};
+		bool bFoundFloatingPoint{};
+
+		for (auto it{numberString.begin()}; it < numberString.end(); ++it) {
+			if (auto const ch{*it}; std::isdigit(ch)) {
+				res.push_back(ch);
+			} else switch (ch) {
+			case 'e': {
+				if (bFoundE) {
+					throw ParseError{
+						"Found more than one `e` while parsing number [{}]",
+						numberString,
+					};
+				} else {
+					bFoundE = true;
+				}
+
+				if (std::next(it) == numberString.end()) {
+					throw ParseError{
+						"Found `e` but nothing after while parsing number [{}]",
+						numberString,
+					};
+				} else if (*std::next(it) == '\'') {
+					throw ParseError{
+						"Found `e` just before `'` while parsing number [{}]", 
+						numberString
+					};
+				}
+
+				res.push_back(ch);
+				break;
+			}
+			case '.': {
+				if (bFoundE) {
+					throw ParseError{
+						"Found floating point in exponent while parsing number [{}]",
+						numberString,
+					};				
+				}
+
+				if (bFoundFloatingPoint) {
+					throw ParseError{
+						"Found more than one floating point while parsing number [{}]",
+						numberString,
+					};
+				} else {
+					bFoundFloatingPoint = true;
+				}
+				
+				if (std::next(it) != numberString.end() && *std::next(it) == '\'') {
+					throw ParseError{
+						"Found a `'` right after a floating point while parsing a number"
+					};
+				}
+
+				res.push_back(ch);
+				break;
+			}
+			case '\'': {
+				if (auto const next{std::next(it)}; next == numberString.end()) {
+					throw ParseError{
+						"Found a `'` at the end of number [{}]",
+						numberString,
+					};
+				} else switch (*next) {
+				case '\'':
+					throw ParseError{"Found two `'` in a row while parsing number [{}]", numberString};
+				case '.': 
+				case 'e':
+					throw ParseError{
+						"Found {} right after `'` while parsing number [{}]", 
+						*next == '.' ? "a floating point" : "`e`",
+						numberString,
+					};
+				} 
+
+				break;
+			}
+			default: ARCALC_UNREACHABLE_CODE();
+			}
+		}
+
+		return res;
 	}
 
 	void PostfixMathEvaluator::ParseSymbolicOperator(char op) {
@@ -245,12 +320,12 @@ namespace ArCalc {
 			} else if (m_Values.Size() == 1) {
 				throw ExprEvalError{
 					"Found binary operator [{}] with 1 operand with value [{}]", 
-					glyph, m_Values.Top().Deref()
+					glyph, *m_Values.Top()
 				};
 			}
 
-			auto const rhs{m_Values.Pop().Deref()};
-			auto const lhs{m_Values.Pop().Deref()}; 
+			auto const rhs{*m_Values.Pop()};
+			auto const lhs{*m_Values.Pop()}; 
 			// Must pop here ^^^ because, lhs might be an lvalue, and the expression result 
 			// must be an rvalue.
 			m_Values.PushRValue(MathOperator::EvalBinary(glyph, lhs, rhs));
@@ -259,7 +334,7 @@ namespace ArCalc {
 				throw ExprEvalError{"Found unary operator [{}] with no operands", glyph};
 			}
 			
-			auto const operand{m_Values.Pop().Deref()};
+			auto const operand{*m_Values.Pop()};
 			// Must pop here ^^^, explained in the other branch.
 			m_Values.PushRValue(MathOperator::EvalUnary(glyph, operand));
 		}
@@ -276,10 +351,10 @@ namespace ArCalc {
 					if (auto const top{m_Values.Pop()}; top.bLValue) {
 						param.SetRef(top.Ptr);
 					} else {
-						throw ExprEvalError{"Passing rvalue [{}] by reference", top.Deref()};
+						throw ExprEvalError{"Passing rvalue [{}] by reference", *top};
 					}
 				} else {
-					param.PushValue(m_Values.Pop().Deref());
+					param.PushValue(*m_Values.Pop());
 				}
 			}
 		} else {

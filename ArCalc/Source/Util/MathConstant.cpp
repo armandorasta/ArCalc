@@ -4,9 +4,10 @@
 
 namespace ArCalc {
 	std::unordered_map<std::string, double> MathConstant::s_ConstantMap{
-		{"e", std::numbers::e},
-		{"pi", std::numbers::pi},
-		{"_Inf", std::numeric_limits<double>::infinity()},
+		{"_e", std::numbers::e},
+		{"_pi", std::numbers::pi},
+		{"_inf", std::numeric_limits<double>::infinity()},
+
 	};
 
 	bool MathConstant::IsValid(std::string_view glyph) {
@@ -14,9 +15,8 @@ namespace ArCalc {
 	}
 
 	double MathConstant::ValueOf(std::string_view glyph) {
-		if (auto const it{s_ConstantMap.find(std::string{glyph})}; it != s_ConstantMap.end()) {
-			return it->second;
-		} 
-		else throw ArCalcException{"Value of invalid constant ({})", glyph};
+		auto const it{s_ConstantMap.find(std::string{glyph})}; 
+		ARCALC_DA(it != s_ConstantMap.end(), "Value of invalid constant ({})", glyph);
+		return it->second;
 	}
 }

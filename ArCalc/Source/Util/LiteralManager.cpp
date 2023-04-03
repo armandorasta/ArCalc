@@ -37,13 +37,11 @@ namespace ArCalc {
 	void LiteralManager::List(std::string_view prefix) const {
 		constexpr auto Tab = "    ";
 
-		IO::Output(m_OStream, "{\n");
 		for (auto const& [name, data] : m_LitMap) {
 			if (name != "_Last" && name.starts_with(prefix)) {
-				IO::Print(m_OStream, "{}{} = {}\n", Tab, name, *data);
+				IO::Print(m_OStream, "\n{}{} = {}", Tab, name, *data);
 			}
 		}
-		IO::Output(m_OStream, "}\n");
 	}
 
 	LiteralData const& LiteralManager::Get(std::string_view litName) const {
@@ -56,7 +54,7 @@ namespace ArCalc {
 	}
 
 	void LiteralManager::Serialize(std::string_view name, std::ostream& os) {
-		os << std::format("C {} {}\n", name, *Get(name));
+		os << std::format("C {} {}\n\n", name, *Get(name));
 	}
 	
 	void LiteralManager::Deserialize(std::istream& is) {

@@ -39,8 +39,12 @@ EVALUATOR_TEST(Number_parsing) {
 	auto ev{GenerateTestingInstance(litMan)};
 	
 	auto const testBothSigns = [&](double value, std::string expr) {
-		ASSERT_DOUBLE_EQ(value, *ev.Eval(expr));
-		ASSERT_DOUBLE_EQ(-value, *ev.Eval("-" + expr));
+		if (HasFailure()) {
+			return;
+		}
+
+		ASSERT_DOUBLE_EQ(value, *ev.Eval(expr)) << expr;
+		ASSERT_DOUBLE_EQ(-value, *ev.Eval("-" + expr)) << ("-" + expr);
 	};
 
 	testBothSigns(5.0, "5");
@@ -65,12 +69,41 @@ EVALUATOR_TEST(Number_parsing) {
 	testBothSigns(5432.1, "5'4'3'2.10000");
 	testBothSigns(5432.1, "5'4'32.1'0'00'0");
 	testBothSigns(5432.1, "5432.1'0'00'0");
-	
+
+	testBothSigns(1e6, "1e6");
+	testBothSigns(1e6, "1e0006");
+	testBothSigns(1e6, "00001e0006");
+	testBothSigns(1e6, "00'00'1e0006");
+	testBothSigns(1e6, "00'00'1e00'06");
+	testBothSigns(1.5e6, "1.5e6");
+	testBothSigns(1.5e6, "1.5e0006");
+	testBothSigns(1.5e6, "00001.50000e0006");
+	testBothSigns(1.5e6, "00'00'1.50000e0006");
+	testBothSigns(1.5e6, "00'00'1.50000e00'06");
+	testBothSigns(1.5e6, "00'00'1.50'0'00e00'06"); // Man...
+
 	// No multiple floating points
 	for (std::string Ones{"11111111"}; auto const i : view::iota(1U, Ones.size())) {
 		Ones[i] = '.';
 		for (auto const j : view::iota(i + 1, Ones.size())) {
 			Ones[j] = '.';
+
+			ASSERT_ANY_THROW(ev.Eval(Ones));
+			ev.Reset(); // Throwing leaves the evaluator in an undefined state.
+
+			Ones[j] = '1';
+		}
+		Ones[i] = '1';
+	}
+
+	// No multiple e's
+	for (std::string Ones{"11111111"}; auto const i : view::iota(1U, Ones.size())) {
+		// I could combine this loop with the last one, but that will just make the testing
+		// process harder.
+
+		Ones[i] = 'e';
+		for (auto const j : view::iota(i + 1, Ones.size())) {
+			Ones[j] = 'e';
 
 			ASSERT_ANY_THROW(ev.Eval(Ones));
 			ev.Reset(); // Throwing leaves the evaluator in an undefined state.
@@ -90,6 +123,22 @@ EVALUATOR_TEST(Number_parsing) {
 
 	// No two ' in a row.
 	ASSERT_ANY_THROW(ev.Eval("1''1"));
+	
+	// No ' at the end.
+	ASSERT_ANY_THROW(ev.Eval("1234'"));
+
+	// No 'e' at the end.
+	ASSERT_ANY_THROW(ev.Eval("1234e"));
+
+	// No ' just before or after 'e'.
+	ASSERT_ANY_THROW(ev.Eval("1234'e5678"));
+	ASSERT_ANY_THROW(ev.Eval("1234e'5678"));
+	ASSERT_ANY_THROW(ev.Eval("1234'e'5678"));
+
+	// No floating points in exponent.
+	ASSERT_ANY_THROW(ev.Eval("1234e45.6"));
+	ASSERT_ANY_THROW(ev.Eval("1234e.456"));
+	ASSERT_ANY_THROW(ev.Eval("1234e456."));
 }
 
 EVALUATOR_TEST(Identifier_parsing) {
@@ -114,8 +163,8 @@ EVALUATOR_TEST(Math_constant_parsing) {
 	auto litMan{LitManFromLits({})};
 	auto ev{GenerateTestingInstance(litMan)};
 
-	ASSERT_DOUBLE_EQ(std::numbers::pi, *ev.Eval("pi"));
-	ASSERT_DOUBLE_EQ(-(2 * std::numbers::pi), *ev.Eval("pi 2 * negate"));
+	ASSERT_DOUBLE_EQ(std::numbers::pi, *ev.Eval("_pi"));
+	ASSERT_DOUBLE_EQ(-(2 * std::numbers::pi), *ev.Eval("_pi 2 * negate"));
 }
 
 EVALUATOR_TEST(Three_operands) {

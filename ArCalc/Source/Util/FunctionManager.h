@@ -119,6 +119,8 @@ namespace ArCalc {
 		void Serialize(std::string_view name, std::ostream& os);
 		void Deserialize(std::istream& is);
 
+		void List(std::string_view prefix = "") const;
+
 		void Reset();
 		void ResetCurrFunc();
 

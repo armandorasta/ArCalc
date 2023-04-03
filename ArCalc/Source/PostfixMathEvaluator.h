@@ -21,8 +21,10 @@ namespace ArCalc {
 
 		void ParseWhiteSpace(char c);
 		void ParseIdentifier(char c);
-		void ParseNumber(char c);
 		void ParseSymbolicOperator(char op);
+
+		void ParseNumber(char c);
+		std::string ValidateAndFixParsedNumber();
 
 		void ParseMinusSign(char c);
 		void PushLiteralValue();

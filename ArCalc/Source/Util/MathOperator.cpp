@@ -120,10 +120,10 @@ namespace ArCalc {
 		// Probability
 		AddUnaryOperator("!",      [](auto o) { return FloatFactorio(o); });
 		AddUnaryOperator("!!",     [](auto o) { return o == 0.0; });
-		AddBinaryOperator("_Perm", [](auto l, auto r) { 
+		AddBinaryOperator("perm", [](auto l, auto r) { 
 			return FloatFactorio(l) / FloatFactorio(l - r);
 		});
-		AddBinaryOperator("_Choose", [](auto l, auto r) {
+		AddBinaryOperator("choose", [](auto l, auto r) {
 			return FloatFactorio(l) / (FloatFactorio(r) * FloatFactorio(l - r));
 		});
 		// Exponential

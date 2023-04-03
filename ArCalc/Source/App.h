@@ -4,6 +4,13 @@
 #include "Util/Util.h"
 #include "Parser.h"
 
+/** Conventions:
+ *
+ * Keywords  => underscore prefix + PascalCase.
+ * Constants => underscore prefix + snake_case (may start with a capital letter).
+ * Operators and built in functions => snake_case.
+ */
+
 namespace ArCalc {
 	class App {
 	public:

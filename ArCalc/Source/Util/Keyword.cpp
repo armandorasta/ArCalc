@@ -40,12 +40,9 @@ namespace ArCalc {
 	}
 
 	KeywordInfo const& Keyword::Get(KT type) {
-		if (auto const it{range::find(s_KeywordMap, type, &KeywordInfo::Type)};
-			it != s_KeywordMap.end())
-		{
-			return *it;
-		}
-		else throw ArCalcException{"Getting invalid keyword [{}]", type};
+		auto const it{range::find(s_KeywordMap, type, &KeywordInfo::Type)};
+		ARCALC_DA(it != s_KeywordMap.end(), "Getting invalid keyword [{}]", type);
+		return *it;
 	}
 
 	std::vector<KeywordType> Keyword::GetAllKeywordTypes() {

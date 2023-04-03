@@ -141,6 +141,7 @@
   <ItemGroup>
     <ClCompile Include="Source\App.cpp" />
     <ClCompile Include="Source\ArCalc.cpp" />
+    <ClCompile Include="Source\Exception\ArCalcException.cpp" />
     <ClCompile Include="Source\Util\LiteralManager.cpp" />
     <ClCompile Include="Source\Util\FunctionManager.cpp" />
     <ClCompile Include="Source\Util\IO.cpp" />

@@ -23,7 +23,11 @@ namespace ArCalc {
 				return res;
 			}
 
-			constexpr double Deref() const { 
+			constexpr double operator*() const { 
+				return const_cast<Entry&>(*this).operator*();
+			}
+
+			constexpr double& operator*() { 
 				return bLValue ? *Ptr : Value;
 			}
 

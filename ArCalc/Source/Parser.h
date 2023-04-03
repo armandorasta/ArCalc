@@ -23,7 +23,7 @@
 		* Handling end of function better. (optional)
 	}
 
-	* Serialization {
+	* Serialization (done) {
 		* Built in functions. (done)
 		* Built in constants. (done)
 		* Some of the user functions {
@@ -32,12 +32,14 @@
 		}
 	}
 
+	* Handle scientific notation. (1e9 == 1 * 10^9) for example. (done)
+	* Add the _Clear keyword (clears the damn console). (probably not gonna happen)
+
 	* Niche {
 		* Making the window always on top.
 		* Changing the color of the console.
 		* Syntax highlighting in the console.
 		* Better error messages.
-		* Make it faster.
 	}
 */
 
@@ -103,6 +105,9 @@ namespace ArCalc {
 	class Parser {
 	private:
 		enum class St : size_t;
+		static bool IsExecSt(St st);
+		static bool IsValSt(St st);
+		static bool IsSelSt(St st);
 
 	private:
 		struct ConditionAndStatement {
@@ -135,25 +140,22 @@ namespace ArCalc {
 
 		bool IsParsingSelectionStatement() const;
 		
-		constexpr auto GetLineNumber() const 
-			{ return m_LineNumber; }
-		constexpr auto IsLineEndsWithSemiColon() const 
-			{ return m_bSemiColon; }
+		constexpr auto GetLineNumber()           const { return m_LineNumber; }
+		constexpr void ResetLineNumber()               { m_LineNumber = 0; }
+		constexpr auto IsLineEndsWithSemiColon() const { return m_bSemiColon; }
 
+		constexpr bool IsCurrentStatementReturning() const { return m_bJustHitReturn; }
 		std::optional<double> GetReturnValue(FuncReturnType retype);
 
-		LiteralManager const& GetLitMan() const
-			{ return m_LitMan; }
-		FunctionManager const& GetFunMan() const 
-			{ return m_FunMan; }
+		LiteralManager const& GetLitMan()  const { return m_LitMan; }
+		FunctionManager const& GetFunMan() const { return m_FunMan; }
 
 		void ExceptionReset();
 
 	private:
 		void HandleFirstToken();
 		std::optional<double> Eval(std::string_view exprString);
-		constexpr auto IncrementLineNumber(size_t inc = 1U) 
-			{ m_LineNumber += inc; }
+		constexpr auto IncrementLineNumber(size_t inc = 1U) { m_LineNumber += inc; }
 		
 		void HandleSetKeyword();
 		void HandleNormalExpression();
@@ -164,8 +166,8 @@ namespace ArCalc {
 		void AddFunctionLine();
 
 		void HandleSelectionKeyword();
-		void HandleConditionalBody(bool bExecute);
-		ConditionAndStatement ParseConditionalHeader(std::string_view header);
+		void HandleConditionalBody(KeywordType selKW, bool bExecute);
+		ConditionAndStatement ParseConditionalHeader(KeywordType selKW, std::string_view header);
 
 		void HandleSaveKeyword();
 		void HandleLoadKeyword();
@@ -174,10 +176,8 @@ namespace ArCalc {
 		void KeywordDebugDoubleCheck(std::string_view glyph, KeywordType what);
 		void ExpectIdentifier(std::string_view what);
 
-		constexpr void SetState(St newState) 
-			{ m_CurrState = newState; }
-		constexpr auto GetState() const 
-			{ return m_CurrState; }
+		constexpr auto GetState()            const { return m_CurrState; }
+		constexpr void SetState(St newState)       { m_CurrState = newState; }
 
 		void Reset();
 		
@@ -193,9 +193,19 @@ namespace ArCalc {
 		bool m_bInFunction{};
 		bool m_bSelectionBlockExecuted{};
 
+		// Used to indicate that all already parsed branches contain return statements, 
+		// so that if the current statement is an else, and it also contains a return,
+		// the function must exist immediately.
+		bool m_bAllOtherBranchesReturned{};
+		bool m_bFuncMustExist{};
 		std::optional<bool> m_bConditionRegister{};
-		std::optional<double> m_ReturnValueRegister{};
 
+		bool m_bJustHitReturn{}; // Used by FunctionManager to know when to exist the function.
+		std::optional<double> m_ReturnValueRegister{};        // Value: for execution.
+		std::optional<FuncReturnType> m_ReturnTypeRegister{}; // Type : for validation.
+
+		// So the validator does not output anything while the function is being defined.
+		std::stringstream m_ValidationStringStream{}; 
 		std::unique_ptr<Parser> m_pValidationSubParser{};
 
 		std::ostream* m_pOutStream{};
