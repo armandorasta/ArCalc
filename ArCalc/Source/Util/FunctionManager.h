@@ -102,6 +102,7 @@ namespace ArCalc {
 		void AddVariadicParam(std::string_view paramName);
 
 		void AddCodeLine(std::string_view codeLine);
+		void RemoveLastLine();
 		void SetReturnType(FuncReturnType retype);
 		void EndDefination();
 
@@ -111,6 +112,7 @@ namespace ArCalc {
 		std::vector<ParamData> const& CurrParamData() const;
 		std::vector<ParamData>& CurrParamData();
 		size_t CurrHeaderLineNumber() const;
+		std::string const& CurrFunctionName() const;
 
 		FuncData const& Get(std::string_view funcName) const;
 		FuncData& Get(std::string_view funcName);
@@ -120,6 +122,12 @@ namespace ArCalc {
 		void Deserialize(std::istream& is);
 
 		void List(std::string_view prefix = "") const;
+
+		void Delete(std::string_view funcName);
+		void Rename(std::string_view oldName, std::string_view newName);
+
+		constexpr void ToggleOutput()          { m_bSuppressOutput ^= 1; }
+		constexpr bool IsOutputEnabled() const { return !m_bSuppressOutput; }
 
 		void Reset();
 		void ResetCurrFunc();
@@ -134,6 +142,7 @@ namespace ArCalc {
 		FuncData m_CurrFuncData{};
 		std::unordered_map<std::string, FuncData> m_FuncMap{};
 
+		bool m_bSuppressOutput{};
 		std::ostream& m_OStream;
 	};
 }

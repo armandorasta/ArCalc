@@ -55,9 +55,7 @@ namespace ArCalc::IO {
 	}
 
 	template <class... FormatArgs> 
-	constexpr auto PrintStd(std::string_view formatString, FormatArgs&&... fmtArgs) requires requires
-		{ Print(std::cout, formatString, std::forward<FormatArgs>(fmtArgs)...); }
-	{
+	constexpr auto PrintStd(std::string_view formatString, FormatArgs&&... fmtArgs) {
 		return Print(std::cout, formatString, std::forward<FormatArgs>(fmtArgs)...);
 	}
 

@@ -27,8 +27,7 @@ namespace ArCalc {
 
 			constexpr auto errorPrefix{"ERROR: "};
 
-			// TODO: fix line number (start at 1, and increment after statement).
-			IO::PrintStd("{:0>3} >> ", m_pParser->GetLineNumber() + 1);
+			IO::PrintStd("{:0>3} | ", m_pParser->GetLineNumber());
 			IO::OutputStd(indentation);
 
 			try { 

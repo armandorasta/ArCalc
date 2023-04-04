@@ -111,10 +111,13 @@ namespace ArCalc {
 				m_Values.PushRValue(MathConstant::ValueOf(literalName) * (bMinus ? -1.0 : 1.0));
 			} else if (Keyword::IsValid(literalName)) {
 				// Only valid keyword in this context is _Last
-				ARCALC_DE("Found keyword [{}] in invalid context (in the middle of an expression)",
-					literalName);
+				throw SyntaxError{
+					"Found keyword [{}] in invalid context (in the middle of an expression)",
+					literalName
+				};
+			} else {
+				throw ExprEvalError{"Used of invalid name [{}]", literalName};
 			}
-			else throw ExprEvalError{"Used of invalid name [{}]", literalName};
 		}
 
 		ResetString();
@@ -224,14 +227,17 @@ namespace ArCalc {
 				} else switch (*next) {
 				case '\'':
 					throw ParseError{"Found two `'` in a row while parsing number [{}]", numberString};
-				case '.': 
+				case '.':
 				case 'e':
 					throw ParseError{
-						"Found {} right after `'` while parsing number [{}]", 
+						"Found {} right after `'` while parsing number [{}]",
 						*next == '.' ? "a floating point" : "`e`",
 						numberString,
 					};
-				} 
+				default:
+					/* Do nothing, and let the next iteration take care */
+					break;
+				}
 
 				break;
 			}

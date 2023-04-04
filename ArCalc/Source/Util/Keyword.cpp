@@ -3,17 +3,18 @@
 
 namespace ArCalc {
 	std::vector<KeywordInfo> Keyword::s_KeywordMap{
-		{"_Set",    KT::Set},
-		{"_Last",   KT::Last},
-		{"_List",   KT::List},
-		{"_Func",   KT::Func},
-		{"_Return", KT::Return},
-		{"_If",     KT::If},
-		{"_Else",   KT::Else},
-		{"_Elif",   KT::Elif},
-		{"_Return", KT::Return},
-		{"_Save",   KT::Save},
-		{"_Load",   KT::Load},
+		{"_Set",     KT::Set},
+		{"_Last",    KT::Last},
+		{"_List",    KT::List},
+		{"_Func",    KT::Func},
+		{"_Return",  KT::Return},
+		{"_If",      KT::If},
+		{"_Else",    KT::Else},
+		{"_Elif",    KT::Elif},
+		{"_Return",  KT::Return},
+		{"_Save",    KT::Save},
+		{"_Load",    KT::Load},
+		{"_Unscope", KT::Unscope}
 	};
 
 	std::optional<Keyword::KT> Keyword::FromString(std::string_view glyph) {

@@ -114,6 +114,12 @@ namespace ArCalc {
 		m_CurrFuncData.CodeLines.push_back(std::string{codeLine});
 	}
 
+	void FunctionManager::RemoveLastLine() {
+		ARCALC_DA(!m_CurrFuncData.CodeLines.empty(), "{} with no last line to remove", 
+			Util::FuncName());
+		m_CurrFuncData.CodeLines.pop_back();
+	}
+
 	void FunctionManager::SetReturnType(FuncReturnType retype) {
 		ARCALC_DA(IsDefinationInProgress(), "{} outside defination", Util::FuncName());
 		m_CurrFuncData.ReturnType = retype;
@@ -151,6 +157,10 @@ namespace ArCalc {
 
 	size_t FunctionManager::CurrHeaderLineNumber() const {
 		return m_CurrFuncData.HeaderLineNumber;
+	}
+
+	std::string const& FunctionManager::CurrFunctionName() const {
+		return m_CurrFuncName;
 	}
 
 	void FunctionManager::Reset() { 
@@ -205,6 +215,10 @@ namespace ArCalc {
 		}
 
 		auto subParser = Parser{m_OStream, func.Params, false};
+		if (!IsOutputEnabled()) {
+			subParser.ToggleOutput();
+		}
+
 		for (auto const& codeLine : func.CodeLines) {
 			subParser.ParseLine(codeLine);
 			if (subParser.IsCurrentStatementReturning()) {
@@ -302,36 +316,40 @@ namespace ArCalc {
 	}
 
 	void FunctionManager::List(std::string_view prefix) const {
-		for (auto const& [name, data] : m_FuncMap) {
-			if (name.starts_with(prefix)) {
-				auto funcSig = std::string{name} + "(";
-				for (auto it{data.Params.begin()}; it < data.Params.end(); ++it) {
-					funcSig.append(it->GetName());
-					if (std::next(it) != data.Params.end()) {
-						funcSig.append(", ");
-					}
-				}
-				funcSig.append(")");
+		if (IsOutputEnabled()) {
+			return;
+		}
 
-				IO::Print(m_OStream, "\n    {}", funcSig);
+		for (auto const& [name, data] : m_FuncMap) {
+			if (!name.starts_with(prefix)) {
+				continue;
 			}
+
+			auto funcSig = std::string{name} + "(";
+			for (auto it{data.Params.begin()}; it < data.Params.end(); ++it) {
+				funcSig.append(it->GetName());
+				if (std::next(it) != data.Params.end()) {
+					funcSig.append(", ");
+				}
+			}
+			funcSig.append(")");
+
+			IO::Print(m_OStream, "\n    {}", funcSig);
 		}
 	}
-}
 
-/*
-for (auto const& [name, data] : m_FuncMap) {
-if (name.starts_with(prefix)) {
-auto funcSig = std::string{name} + "(";
-for (auto it{data.Params.begin()}; it < data.Params.end(); ++it) {
-funcSig.append(it->GetName());
-if (std::next(it) != data.Params.end()) {
-funcSig.append(", ");
-}
-}
-funcSig.append(")");
+	void FunctionManager::Delete(std::string_view funcName) {
+		auto const ownedName = std::string{funcName};
+		ARCALC_DA(m_FuncMap.contains(ownedName), "Deleting non-existant function [{}]", funcName);
 
-IO::Print(m_OStream, "\n{}{}", Tab, funcSig);
+		m_FuncMap.erase(ownedName);
+	}
+
+	void FunctionManager::Rename(std::string_view oldName, std::string_view newName) {
+		auto const ownedOldName = std::string{oldName};
+		ARCALC_DA(m_FuncMap.contains(ownedOldName), "Renaming non-existant function [{}]", oldName);
+
+		m_FuncMap.emplace(std::string{newName}, m_FuncMap.at(ownedOldName));
+		m_FuncMap.erase(ownedOldName);
+	}
 }
-}
-*/

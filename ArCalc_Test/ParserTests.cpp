@@ -12,12 +12,10 @@
 using namespace ArCalc;
 
 class ParserTests : public testing::Test {
-private:
-	inline static std::stringstream s_BullshitSS{};
-
 public:
 	Parser GenerateTestingInstance() {
-		Parser par{s_BullshitSS};
+		Parser par{std::cout};
+		par.ToggleOutput();
 		return par;
 	}
 
@@ -387,7 +385,7 @@ PARSER_TEST(Selection_statement_multiple_elifs_rounding) {
 		par.ParseLine(std::format("_Else _Set ret {};", 5.0 * currElifCount));
 		par.ParseLine("_Return ret;");
 
-		auto const cppVersionOfMyFunc = [=](double a) -> double {
+		auto const MyFunc = [=](double a) -> double {
 			double ret{};
 			if (a < 0.0) { ret = 0.0; } // _If a 0 < _Set ret 0;
 			for (auto const i : view::iota(1, currElifCount + 1)) {
@@ -401,7 +399,7 @@ PARSER_TEST(Selection_statement_multiple_elifs_rounding) {
 		// Calling the function.
 		for (auto const i : view::iota(-5, 5 * (currElifCount + 1))) {
 			par.ParseLine(std::format("{} MyFunc", i));
-			ASSERT_DOUBLE_EQ(cppVersionOfMyFunc(i), par.GetLitMan().GetLast()) 
+			ASSERT_DOUBLE_EQ(MyFunc(i), par.GetLitMan().GetLast()) 
 				<< std::format("Parameter was {:d}", i);
 		}
 	}
@@ -630,7 +628,7 @@ PARSER_TEST(Different_return_types_one_in_branch_one_is_not) {
 PARSER_TEST(Selection_statement_multiple_decoder_using_multiple_returns) {
 	auto par{GenerateTestingInstance()};
 	par.ParseLine("_Func ExecuteOpCode code a b");
-	CHECK_ASSERT_NO_THROW(par.ParseLine("_If   code 0 ==: _Return a b +;"));
+	ASSERT_NO_THROW(par.ParseLine("_If   code 0 ==: _Return a b +;"));
 	ASSERT_TRUE(par.IsParsingFunction());
 
 	ASSERT_NO_THROW(par.ParseLine("_Elif code 1 ==: _Return a b -;"));
@@ -716,4 +714,116 @@ PARSER_TEST(Serializing_a_function) {
 	// Can't use asserts because of this shit right here.
 	// Clean up by opening the file without the append flag.
 	std::ofstream{IO::GetSerializationPath() / "Testing.txt"};
+}
+
+PARSER_TEST(Unscope_in_global_scope) {
+	auto par{GenerateTestingInstance()};
+
+	ASSERT_NO_THROW(par.ParseLine("_Unscope;"));
+}
+
+PARSER_TEST(Unscope_in_function_scope) {
+	auto par{GenerateTestingInstance()};
+
+	par.ParseLine("_Func MyFunc param;");
+	ASSERT_TRUE(par.IsParsingFunction());
+
+	ASSERT_NO_THROW(par.ParseLine("_Unscope;"));
+	ASSERT_FALSE(par.IsParsingFunction());
+
+	ASSERT_ANY_THROW(par.ParseLine("_Return;"));
+}
+
+PARSER_TEST(Unscope_in_conditional) {
+
+	auto const prepParser = [this]() {
+		auto par{GenerateTestingInstance()};
+		par.ParseLine("_Func MyFunc param;");
+		return par;
+	};
+
+	/* Same line if */ {
+		auto par{prepParser()};
+		ASSERT_NO_THROW(par.ParseLine("_If param 0 >: _Unscope;"));
+		ASSERT_ANY_THROW(par.ParseLine("_Else _Return 0;")); // Hanging else.
+	}
+
+	/* Next line if */ {
+		auto par{prepParser()};
+		ASSERT_NO_THROW(par.ParseLine("_If param 0 >:"));
+		ASSERT_NO_THROW(par.ParseLine("    _Unscope;"));
+		ASSERT_ANY_THROW(par.ParseLine("_Else _Return 0;")); // Hanging else.
+	}
+
+	/* Same line elif */ {
+		auto par{prepParser()};
+		ASSERT_NO_THROW(par.ParseLine("_If param 0 >:   _Return 1;"));
+		ASSERT_NO_THROW(par.ParseLine("_Elif param 0 <: _Unscope;"));
+		ASSERT_NO_THROW(par.ParseLine("_Else            _Return 0;"));
+
+		// Terminating means the elif successfully was cancelled.
+		ASSERT_FALSE(par.IsParsingFunction());
+	}
+
+	/* Next line elif */ {
+		auto par{prepParser()};
+		ASSERT_NO_THROW(par.ParseLine("_If param 0 >: _Return 1;"));
+		ASSERT_NO_THROW(par.ParseLine("_Elif param 0 <:"));
+		ASSERT_NO_THROW(par.ParseLine("    _Unscope;"));
+		ASSERT_NO_THROW(par.ParseLine("_Else _Return 0;"));
+
+		// Terminating means the elif successfully was cancelled.
+		ASSERT_FALSE(par.IsParsingFunction());
+	}
+
+	/* Same line else. */ {
+		auto par{prepParser()};
+		ASSERT_NO_THROW(par.ParseLine("_If param 0 >:   _Return 1;"));
+		ASSERT_NO_THROW(par.ParseLine("_Elif param 0 <: _Return -1;"));
+		ASSERT_NO_THROW(par.ParseLine("_Else _Unscope;"));
+		ASSERT_NO_THROW(par.ParseLine("_Else _Return 0;")); // The former one was cancelled.
+	}
+
+	/* Next line */ {
+		auto par{prepParser()};
+		ASSERT_NO_THROW(par.ParseLine("_If param 0 >:   _Return 1;"));
+		ASSERT_NO_THROW(par.ParseLine("_Elif param 0 <: _Return -1;"));
+		ASSERT_NO_THROW(par.ParseLine("_Else"));
+		ASSERT_NO_THROW(par.ParseLine("    _Unscope;"));
+		ASSERT_NO_THROW(par.ParseLine("_Else _Return 0;")); // The former one was cancelled.
+	}
+}
+
+PARSER_TEST(Unscope_deleting_literals) {
+	auto par{GenerateTestingInstance()};
+
+	// In global scope.
+	par.ParseLine("_Set myLit 15.0;");
+	ASSERT_NO_THROW(par.ParseLine("_Unscope myLit;"));
+	ASSERT_FALSE(par.GetLitMan().IsVisible("myLit"));
+
+	// In function scope.
+	par.ParseLine("_Func MyFunc param;");
+	par.ParseLine("_Set myLit param;");
+
+	// due to how the keyword works, deleting literals in function scopes in very error
+	// prone, and is not very useful in most case, so I am gonna disallow it for now.
+	ASSERT_ANY_THROW(par.ParseLine("_Unscope myLit;"));
+}
+
+PARSER_TEST(Unscope_deleting_and_renaming_functions) {
+	auto par{GenerateTestingInstance()};
+
+	// Deleting.
+	par.ParseLine("_Func UselessFunc unused");
+	par.ParseLine("    _Return;");
+	ASSERT_NO_THROW(par.ParseLine("_Unscope UselessFunc;"));
+	ASSERT_FALSE(par.GetFunMan().IsDefined("UselessFunc"));
+
+	// Renaming.
+	par.ParseLine("_Func UselessFunc unused");
+	par.ParseLine("    _Return;");
+	ASSERT_NO_THROW(par.ParseLine("_Unscope UselessFunc BestFuncEver;"));
+	ASSERT_FALSE(par.GetFunMan().IsDefined("UselessFunc"));
+	ASSERT_TRUE(par.GetFunMan().IsDefined("BestFuncEver"));
 }

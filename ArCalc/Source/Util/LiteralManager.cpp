@@ -22,6 +22,12 @@ namespace ArCalc {
 		m_LitMap.emplace(ownedName, LiteralData::MakeRef(ptr));
 	}
 
+	void LiteralManager::Delete(std::string_view litName) {
+		auto const ownedName = std::string{litName};
+		ARCALC_DA(m_LitMap.contains(ownedName), "Deleting non-existant literal [{}]", litName);
+		m_LitMap.erase(ownedName);
+	}
+
 	double LiteralManager::GetLast() const {
 		return *m_LitMap.at(Keyword::ToString(KeywordType::Last));
 	}
@@ -36,6 +42,10 @@ namespace ArCalc {
 
 	void LiteralManager::List(std::string_view prefix) const {
 		constexpr auto Tab = "    ";
+
+		if (!IsOutputEnabled()) {
+			return;
+		}
 
 		for (auto const& [name, data] : m_LitMap) {
 			if (name != "_Last" && name.starts_with(prefix)) {

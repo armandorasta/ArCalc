@@ -6,34 +6,14 @@
 #include "Util/LiteralManager.h"
 
 /* Minimum amount of features to start working on the console interface:
-	* Variables (done) {
-		* Global variables, which are only usable in the global scope.
-		* Local variables, which are only usable in their respective scope.
-	}
-	
-	* Functions {
-		* Passing m_By value. (done)
-		* Passing m_By reference. (done)
-		* Branching (done) {
-			* If.
-			* Else.
-			* Elif chaining.
-		}
-		* Return and not return a value. (done)
-		* Handling end of function better. (optional)
-	}
-
-	* Serialization (done) {
-		* Built in functions. (done)
-		* Built in constants. (done)
-		* Some of the user functions {
-			* They should be sortable each in their own category.
-			* They must not need to be loaded all at once.
-		}
-	}
-
-	* Handle scientific notation. (1e9 == 1 * 10^9) for example. (done)
 	* Add the _Clear keyword (clears the damn console). (probably not gonna happen)
+	* Add hexadecimal, binary and octal number parsing.
+	* Add Current session serialization {
+		* Maybe by not passing anything to the _Save keyword, it will serialize the current
+		  session to disk?
+		* Maybe by not passed anything to the _Load keyword, it will load the last session
+		  if it exists, other wise it will be a syntax error?
+	}
 
 	* Niche {
 		* Making the window always on top.
@@ -115,6 +95,40 @@ namespace ArCalc {
 			std::string_view Statement;
 		};
 
+		class ConditionInfo {
+		public:
+			ConditionInfo()                                = default;
+			ConditionInfo(ConditionInfo const&)            = default;
+			ConditionInfo(ConditionInfo&&)                 = default;
+			ConditionInfo& operator=(ConditionInfo const&) = default;
+			ConditionInfo& operator=(ConditionInfo&&)      = default;
+
+		public:
+			void Unreset();
+			bool Get() const;
+
+			constexpr void Reset() {
+				m_bAvail = false;
+			}
+
+			constexpr bool IsAvail() const {
+				return m_bAvail;
+			}
+
+			constexpr void Set(bool toWhat) {
+				m_bCond = toWhat;
+				m_bAvail = true;
+			}
+
+			constexpr bool ValueOr(bool what) const {
+				return IsAvail() ? m_bCond : what;
+			}
+
+		private:
+			bool m_bCond{};
+			bool m_bAvail{};
+		};
+
 	public:
 		Parser(Parser const&)         = default;
 		Parser(Parser&&)              = default;
@@ -140,9 +154,9 @@ namespace ArCalc {
 
 		bool IsParsingSelectionStatement() const;
 		
-		constexpr auto GetLineNumber()           const { return m_LineNumber; }
+		constexpr size_t GetLineNumber()         const { return m_LineNumber; }
 		constexpr void ResetLineNumber()               { m_LineNumber = 0; }
-		constexpr auto IsLineEndsWithSemiColon() const { return m_bSemiColon; }
+		constexpr bool IsLineEndsWithSemiColon() const { return m_bSemiColon; }
 
 		constexpr bool IsCurrentStatementReturning() const { return m_bJustHitReturn; }
 		std::optional<double> GetReturnValue(FuncReturnType retype);
@@ -152,10 +166,13 @@ namespace ArCalc {
 
 		void ExceptionReset();
 
+		void ToggleOutput();
+		constexpr bool IsOutputEnabled() const { return !m_bSuppressOutput; }
+
 	private:
 		void HandleFirstToken();
 		std::optional<double> Eval(std::string_view exprString);
-		constexpr auto IncrementLineNumber(size_t inc = 1U) { m_LineNumber += inc; }
+		constexpr void IncrementLineNumber(size_t inc = 1U) { m_LineNumber += inc; }
 		
 		void HandleSetKeyword();
 		void HandleNormalExpression();
@@ -172,12 +189,24 @@ namespace ArCalc {
 		void HandleSaveKeyword();
 		void HandleLoadKeyword();
 
+		void HandleUnscopeKeyword();
+
 		void ExpectKeyword(std::string_view glyph, KeywordType what);
 		void KeywordDebugDoubleCheck(std::string_view glyph, KeywordType what);
 		void ExpectIdentifier(std::string_view what);
 
-		constexpr auto GetState()            const { return m_CurrState; }
+		constexpr St GetState()              const { return m_CurrState; }
 		constexpr void SetState(St newState)       { m_CurrState = newState; }
+
+		template <class... FormatArgs>
+		void Print(std::string_view fmtString, FormatArgs&&... fmtArgs) {
+			if (IsOutputEnabled() && !IsLineEndsWithSemiColon()) {
+				GetOStream() << std::vformat(
+					fmtString, 
+					std::make_format_args(std::forward<FormatArgs>(fmtArgs)...)
+				);
+			}
+		}
 
 		void Reset();
 		
@@ -198,7 +227,8 @@ namespace ArCalc {
 		// the function must exist immediately.
 		bool m_bAllOtherBranchesReturned{};
 		bool m_bFuncMustExist{};
-		std::optional<bool> m_bConditionRegister{};
+		
+		ConditionInfo m_bConditionRegister{};
 
 		bool m_bJustHitReturn{}; // Used by FunctionManager to know when to exist the function.
 		std::optional<double> m_ReturnValueRegister{};        // Value: for execution.
@@ -206,8 +236,9 @@ namespace ArCalc {
 
 		// So the validator does not output anything while the function is being defined.
 		std::stringstream m_ValidationStringStream{}; 
-		std::unique_ptr<Parser> m_pValidationSubParser{};
+		std::unique_ptr<Parser> m_pValSubParser{};
 
+		bool m_bSuppressOutput{};
 		std::ostream* m_pOutStream{};
 	};
 }

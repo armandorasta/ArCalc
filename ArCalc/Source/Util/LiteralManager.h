@@ -63,6 +63,7 @@ namespace ArCalc {
 
 		void Add(std::string_view litName, double value);
 		void Add(std::string_view litName, double* ptr);
+		void Delete(std::string_view litName);
 
 		// Sets the value of an existing literal
 		void SetLast(double toWhat);
@@ -76,9 +77,13 @@ namespace ArCalc {
 		void Serialize(std::string_view name, std::ostream& os);
 		void Deserialize(std::istream& is);
 
+		constexpr void ToggleOutput()          { m_bSuppressOutput ^= 1; }
+		constexpr bool IsOutputEnabled() const { return !m_bSuppressOutput; }
+
 		void Reset();
 
 	private:
+		bool m_bSuppressOutput{};
 		std::ostream& m_OStream;
 		LiteralMap m_LitMap{};
 	};

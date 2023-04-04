@@ -67,5 +67,21 @@ namespace ArCalc {
 			Loads an already serialized set of values from disc.
 		*/
 		Load,
+
+		/*
+			_Unscope 
+
+			Cancels the current scope or does nothing when in global scope.
+			--------------------------------------------------------------------
+			_Unscope [literal name]
+
+			Deletes the literal, even if it's a function parameter.
+			--------------------------------------------------------------------
+			_Unscope [function name] [new name, opt]
+
+			Deletes or renames the function.
+			--------------------------------------------------------------------
+		*/
+		Unscope,
 	};
 }
