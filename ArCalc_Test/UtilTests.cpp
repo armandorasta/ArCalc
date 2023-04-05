@@ -26,10 +26,12 @@ UTIL_TEST(Eq) {
 
 UTIL_TEST(Negate_with_binary_operators) {
 	static std::vector<std::function<bool(int32_t, int32_t)>> const sc_Funcs{
-		std::greater<int32_t>{},
-		std::less<int32_t>{},
-		std::equal_to<int32_t>{},
-		std::not_equal_to<int32_t>{},
+		std::greater      <int32_t>{},
+		std::greater_equal<int32_t>{},
+		std::equal_to     <int32_t>{},
+		std::less_equal   <int32_t>{},
+		std::less         <int32_t>{},
+		std::not_equal_to <int32_t>{},
 	};
 
 	for (auto const lhs : view::iota(-10I32, 10)) {
@@ -53,7 +55,7 @@ UTIL_TEST(Negate_with_unary_operators) {
 
 	for (auto const operand : view::iota(-10I32, 10)) {
 		for (auto& func : sc_Funcs) {
-			ASSERT_EQ(func(operand), !Util::Negate(func)(operand));
+			ASSERT_EQ(!func(operand), Util::Negate(func)(operand));
 		}
 	}
 }

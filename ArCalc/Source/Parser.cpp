@@ -117,7 +117,7 @@ namespace ArCalc {
 		if (std::ifstream file{filePath}; file.is_open()) {
 			ParseIStream(file);
 		}
-		else throw ParseError{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
+		else throw ParseError{"Parser::ParseFile on Invalid file [{}]", filePath.string()};
 	}
 
 	void Parser::ParseFile(fs::path const& filePath, fs::path const& outFilePath) {
@@ -125,7 +125,7 @@ namespace ArCalc {
 			std::ofstream outFile{outFilePath};
 			ParseIStream(file, outFile);
 		}
-		else throw ParseError{"{} on Invalid file [{}]", Util::FuncName(), filePath.string()};
+		else throw ParseError{"Parser::ParseFile on Invalid file [{}]", filePath.string()};
 	}
 
 	void Parser::ParseIStream(std::istream& is) {
@@ -406,8 +406,6 @@ namespace ArCalc {
 			};
 		} 
 
-		m_FunMan.BeginDefination(funcName, GetLineNumber());
-
 		if (tokens.size() == 2) {
 			throw ParseError{
 				"Expected at least one parameter after the name of the function, but found none.\n"
@@ -415,6 +413,9 @@ namespace ArCalc {
 				KeywordType::Func
 			};
 		}
+
+		// Defination should begin after all header validation is done.
+		m_FunMan.BeginDefination(funcName, GetLineNumber());
 		
 		// Function parameters
 		for (auto const i : view::iota(2U, tokens.size())) {

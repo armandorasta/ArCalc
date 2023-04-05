@@ -4,10 +4,6 @@
 #include "Exception/ArCalcException.h"
 
 namespace ArCalc::Util {
-	constexpr auto FuncName(std::source_location debugInfo = {}) {
-		return debugInfo.function_name();
-	}
-
 	constexpr auto Eq(auto const& lhs) {
 		return [=](auto const& rhs) { return lhs == rhs; };
 	}

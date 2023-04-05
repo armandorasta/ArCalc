@@ -56,5 +56,10 @@ namespace ArCalc {
 		static void AddBasicOperators();
 		static void AddTrigOperators();
 		static double FloatFactorio(double n);
+		static void AssertNotInfinity(double n, std::string_view funcName);
+		static void AssertInRange(double n, double min, double max, std::string_view funcName);
+		static void AssertGreaterThan(double n, double min, std::string_view funcName);
+		static void AssertLessThan(double n, double max, std::string_view funcName);
+		static void AssertInteger(double n, std::string_view funcName);
 	};
 }

@@ -12,7 +12,7 @@
 		* Maybe by not passing anything to the _Save keyword, it will serialize the current
 		  session to disk?
 		* Maybe by not passed anything to the _Load keyword, it will load the last session
-		  if it exists, other wise it will be a syntax error?
+		  if it exists, otherwise it will be a syntax error?
 	}
 
 	* Niche {

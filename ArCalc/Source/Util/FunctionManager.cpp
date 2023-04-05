@@ -82,7 +82,8 @@ namespace ArCalc {
 	}
 
 	void FunctionManager::BeginDefination(std::string_view funcName, size_t lineNumber) {
-		ARCALC_DA(!IsDefinationInProgress(), "{} inside another function", Util::FuncName());
+		ARCALC_DA(!IsDefinationInProgress(), 
+			"FunctionManager::BeginDefination inside another function");
 		if (IsDefined(funcName)) {
 			throw ParseError{"Multiple definations of function [{}]", funcName};
 		}
@@ -91,8 +92,7 @@ namespace ArCalc {
 	}
 
 	void FunctionManager::MakeVariadic() {
-		ARCALC_DA(IsDefinationInProgress(), "{} outside defination", Util::FuncName());
-		//ARCALC_DA(!m_CurrFuncData.Params.empty(), "Variadic functions may at least have one parameter");
+		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::MakeVariadic outside defination");
 		m_CurrFuncData.IsVariadic = true;
 	}
 
@@ -109,29 +109,29 @@ namespace ArCalc {
 	}
 
 	void FunctionManager::AddCodeLine(std::string_view codeLine) {
-		ARCALC_DA(IsDefinationInProgress(), "{} outside defination", Util::FuncName());
+		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::AddCodeLine outside defination");
 		ARCALC_DA(!m_CurrFuncData.Params.empty(), "Adding a function takes no arguments");
 		m_CurrFuncData.CodeLines.push_back(std::string{codeLine});
 	}
 
 	void FunctionManager::RemoveLastLine() {
-		ARCALC_DA(!m_CurrFuncData.CodeLines.empty(), "{} with no last line to remove", 
-			Util::FuncName());
+		ARCALC_DA(!m_CurrFuncData.CodeLines.empty(), 
+			"FunctionManager::RemoveLastLine with no last line to remove");
 		m_CurrFuncData.CodeLines.pop_back();
 	}
 
 	void FunctionManager::SetReturnType(FuncReturnType retype) {
-		ARCALC_DA(IsDefinationInProgress(), "{} outside defination", Util::FuncName());
+		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::SetReturnType outside defination");
 		m_CurrFuncData.ReturnType = retype;
 	}
 
 	FuncReturnType FunctionManager::GetCurrentReturnType() const {
-		ARCALC_DA(IsDefinationInProgress(), "{} outside defination", Util::FuncName());
+		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::GetCurrentReturnType outside defination");
 		return m_CurrFuncData.ReturnType;
 	}
 
 	bool FunctionManager::IsCurrFuncVariadic() const {
-		ARCALC_DA(IsDefinationInProgress(), "{} outside defination", Util::FuncName());
+		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::IsCurrFuncVariadic outside defination");
 		return m_CurrFuncData.IsVariadic;
 	}
 
@@ -171,7 +171,7 @@ namespace ArCalc {
 	void FunctionManager::AddParamImpl(std::string_view paramName, bool bParameterPack, 
 		bool m_bReference) 
 	{
-		ARCALC_DA(IsDefinationInProgress(), "{} outside defination", Util::FuncName());
+		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::AddParamImpl outside defination");
 		ARCALC_DA(!m_CurrFuncData.IsVariadic, "Adding parameter after making function variadic");
 		ARCALC_DA(m_CurrFuncData.CodeLines.empty(), 
 			"Tried to add a parameter after adding a code line");
@@ -197,7 +197,7 @@ namespace ArCalc {
 	}
 
 	FuncData& FunctionManager::Get(std::string_view funcName) {
-		ARCALC_DA(IsDefined(funcName), "{} on invalid function [{}]", Util::FuncName(), funcName);
+		ARCALC_DA(IsDefined(funcName), "FunctionManager::Get on invalid function [{}]", funcName);
 		return m_FuncMap.at(std::string{funcName});
 	}
 
