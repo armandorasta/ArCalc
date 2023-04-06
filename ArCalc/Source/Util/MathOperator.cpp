@@ -26,6 +26,7 @@ namespace ArCalc {
 		ARCALC_DA(!IsInitialized(), "Double initialization of MathOperator");
 		AddBasicOperators();
 		AddTrigOperators();
+		AddConversionOperators();
 	}
 
 	bool MathOperator::IsValid(std::string_view op) {
@@ -92,6 +93,21 @@ namespace ArCalc {
 		AddBinaryOperator("-", std::minus<>{});
 		AddBinaryOperator("*", [](auto l, auto r) { return l * r; });
 		AddBinaryOperator("/", [](auto l, auto r) { return l / r; });
+		AddBinaryOperator("mod", [](auto l, auto r) {
+			if (l < 0.0) {
+				throw MathError{"Modulus operator with lhs [{}] (negative)"};
+			} else if (std::fmod(l, 1.0) > 0.000001) {
+				throw MathError{"Modulus operator with lhs [{}] (non-integer)"};
+			}
+
+			if (r < 0.0) {
+				throw MathError{"Modulus operator with rhs [{}] (negative)"};
+			} else if (std::fmod(r, 1.0) > 0.000001) {
+				throw MathError{"Modulus operator with rhs [{}] (non-integer)"};
+			}
+			return static_cast<double>(static_cast<size_t>(l) % static_cast<size_t>(r)); 
+		});
+
 		// Relational
 		AddBinaryOperator("<", std::less          <>{});
 		AddBinaryOperator("<=", std::less_equal   <>{});
@@ -99,16 +115,32 @@ namespace ArCalc {
 		AddBinaryOperator("!=", std::not_equal_to <>{});
 		AddBinaryOperator(">=", std::greater_equal<>{});
 		AddBinaryOperator(">", std::greater       <>{});
+
 		// Logical
 		AddBinaryOperator("&&", [](auto l, auto r) { return l && r ? 1.0 : 0.0; });
 		AddBinaryOperator("||", [](auto l, auto r) { return l || r ? 1.0 : 0.0; });
 		AddBinaryOperator("^^", [](auto l, auto r) { return l && !r || r && !l ? 1.0 : 0.0; });
 		AddUnaryOperator("!",   [](auto o        ) { return std::abs(o) < 0.000001; });
+
 		// Utils
 		AddBinaryOperator("max", [](auto l, auto r) { return std::max(l, r); });
 		AddBinaryOperator("min", [](auto l, auto r) { return std::min(l, r); });
-		AddUnaryOperator("rtod", [](auto o) { return o * 180.0 / std::numbers::pi; });
-		AddUnaryOperator("dtor", [](auto o) { return o * std::numbers::pi / 180.0; });
+		AddBinaryOperator("gcd", [](auto l, auto r) {
+			if (l < 0.0) {
+				throw MathError{"Operator gcd with lhs [{}] (negative)"};
+			} else if (std::fmod(l, 1.0) > 0.000001) {
+				throw MathError{"Operator gcd with lhs [{}] (non-integer)"};
+			}
+
+			if (r < 0.0) {
+				throw MathError{"Operator gcd with rhs [{}] (negative)"};
+			} else if (std::fmod(r, 1.0) > 0.000001) {
+				throw MathError{"Operator gcd with rhs [{}] (non-integer)"};
+			}
+
+			return static_cast<double>(std::gcd(static_cast<size_t>(l), static_cast<size_t>(r)));
+		});
+
 		// Unary
 		AddUnaryOperator("negate", [](auto o) { return -o; });
 		AddUnaryOperator("abs",    [](auto o) { return std::abs(o); });
@@ -121,16 +153,16 @@ namespace ArCalc {
 			AssertGreaterThan(o, 0, "sqrt");
 			return std::sqrt(o); 
 		});
+
 		// Probability
-		AddUnaryOperator("fac", [](auto o) {
-			return FloatFactorio(o);
-		});
+		AddUnaryOperator("fac", &FloatFactorio);
 		AddBinaryOperator("perm", [](auto l, auto r) {
 			return FloatFactorio(l) / FloatFactorio(l - r);
 		});
 		AddBinaryOperator("choose", [](auto l, auto r) {
 			return FloatFactorio(l) / (FloatFactorio(r) * FloatFactorio(l - r));
 		});
+
 		// Exponential
 		AddBinaryOperator("^", [](auto l, auto r) {
 			return std::pow(l, r);
@@ -200,6 +232,54 @@ namespace ArCalc {
 			res *= i;
 		}
 		return static_cast<double>(res);
+	}
+
+	// These will eventually be depricated, and be replaced by the new unit system,
+	// but that is not happening any time soon.
+	void MathOperator::AddConversionOperators() {
+		auto const addRatioConvOp = [](auto fromGlyph, auto toGlyph, auto ratio) {
+			AddUnaryOperator(std::string{fromGlyph} + "_to_" + toGlyph,
+				[=](auto n) { return n * ratio; });
+			AddUnaryOperator(std::string{toGlyph} + "_to_" + fromGlyph,
+				[=](auto n) { return n / ratio; });
+		};
+
+		// I got these numbers from the windows shitty calculator.
+
+		// Length:
+		addRatioConvOp("m", "ft", 3.28084);
+		addRatioConvOp("ft", "in", 12.0);
+		addRatioConvOp("m", "in", 39.37008);
+		addRatioConvOp("lb", "kg", 2.204623);
+
+		// Temperature:
+		AddUnaryOperator("cel_to_fah", [](auto n) { return  n * 1.8 + 32.0; });
+		AddUnaryOperator("cel_to_kel", [](auto n) { return  n + 273.15; });
+		AddUnaryOperator("fah_to_cel", [](auto n) { return (n - 32.0) / 1.8; });
+		AddUnaryOperator("fah_to_kel", [](auto n) { return (n - 32.0) / 1.8 + 273.15; });
+		AddUnaryOperator("kel_to_cel", [](auto n) { return  n - 273.15; });
+		AddUnaryOperator("kel_to_fah", [](auto n) { return (n - 273.15) * 1.8 + 32.0; });
+
+		// Energy:
+		addRatioConvOp("ev", "j", 1.6e-19);
+		addRatioConvOp("cal", "j", 4.184);
+		addRatioConvOp("btu", "kj", 1.055056);
+		addRatioConvOp("btu", "j", 1.055056e3);
+
+		// Time:
+		constexpr std::array names{"year", "month", "day", "hour", "min", "sec"};
+		constexpr std::array ratios{413.0 /*does not matter*/, 12.0, 30.0, 24.0, 60.0, 60.0};
+		for (auto const i : view::iota(0U, names.size() - 1)) {
+			auto mulAcc{1.0};
+			for (auto const j : view::iota(i + 1, names.size())) {
+				mulAcc *= ratios[j];
+				addRatioConvOp(names[i], names[j], mulAcc);
+			}
+		}
+
+		// Angles:
+		AddUnaryOperator("rtod", [](auto o) { return o * 180.0 / std::numbers::pi; });
+		AddUnaryOperator("dtor", [](auto o) { return o * std::numbers::pi / 180.0; });
 	}
 
 	void MathOperator::AssertInRange(double n, double min, double max, std::string_view funcName) {

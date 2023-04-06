@@ -53,8 +53,11 @@ namespace ArCalc {
 		static void AddTernaryOperator(
 			std::string const& glyph, 
 			std::function<double(double, double, double)>&& func);
+		
 		static void AddBasicOperators();
 		static void AddTrigOperators();
+		static void AddConversionOperators();
+
 		static double FloatFactorio(double n);
 		static void AssertNotInfinity(double n, std::string_view funcName);
 		static void AssertInRange(double n, double min, double max, std::string_view funcName);
