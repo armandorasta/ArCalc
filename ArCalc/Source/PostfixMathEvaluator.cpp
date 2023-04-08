@@ -43,16 +43,18 @@ namespace ArCalc {
 					}
 				}(/*)(*/)
 			};
-		} else if (m_Values.IsEmpty()) {
-			return {};
-		} 
-		else return *m_Values.Pop();
+		} else {
+			auto const res = m_Values.IsEmpty() ? std::optional<double>{} : *m_Values.Pop();
+			Reset();
+			return res;
+		}
 	}
 
 	void PostfixMathEvaluator::Reset() {
 		ResetString();
 		m_Values.Clear();
 		m_CurrState = St::WhiteSpace;
+		m_NumPar.Reset();
 	}
 
 	void PostfixMathEvaluator::DoIteration(char c) {
@@ -125,127 +127,12 @@ namespace ArCalc {
 	}
 
 	void PostfixMathEvaluator::ParseNumber(char c) {
-#ifndef NDEBUG
-		auto const state{GetState()};
-#endif // ^^^^ Variable is used in debug mode only.
-		ARCALC_NOT_POSSIBLE(state != St::ParsingNumber);
-
-		if (std::isdigit(c) || 
-			c == 'e' ||  // For exponential notation.
-			c == '.' ||  // Floating point.
-			c == '\''||  // Single quotes are for readability 10000000 => 10'000'000.
-			c == '-')    // For negative exponents.
-		{
-			AddChar(c);
-		} else if (std::isalpha(c)) {
-			throw ParseError{
-				"Found invalid character [{}] while parsing number [{}]",
-				c, GetString(),
-			};
-		} else {
-			// Finished parsing, evaluating...
-			auto const cleanNumberString{ValidateAndFixParsedNumber()};
-			m_Values.PushRValue(std::atof(cleanNumberString.c_str()));
+		if (auto const res{m_NumPar.Parse(c)}; res.IsDone) {
+			// When the string is not empty, a minus sign is assumed to be there.
+			m_Values.PushRValue(GetString().empty() ? res.Value : -res.Value);
 			ResetString();
 			ResetState(c);
 		}
-	}
-
-	std::string PostfixMathEvaluator::ValidateAndFixParsedNumber() {
-		auto numberString = std::string_view{GetString()}; 
-
-		auto res = std::string{};
-		if (numberString.front() == '-') {
-			numberString = numberString.substr(1);
-			res.push_back('-');
-		}
-
-		bool bFoundE{};
-		bool bFoundFloatingPoint{};
-
-		for (auto it{numberString.begin()}; it < numberString.end(); ++it) {
-			if (auto const ch{*it}; std::isdigit(ch)) {
-				res.push_back(ch);
-			} else switch (ch) {
-			case 'e': {
-				if (bFoundE) {
-					throw ParseError{
-						"Found more than one `e` while parsing number [{}]",
-						numberString,
-					};
-				} else {
-					bFoundE = true;
-				}
-
-				if (std::next(it) == numberString.end()) {
-					throw ParseError{
-						"Found `e` but nothing after while parsing number [{}]",
-						numberString,
-					};
-				} else if (*std::next(it) == '\'') {
-					throw ParseError{
-						"Found `e` just before `'` while parsing number [{}]", 
-						numberString
-					};
-				}
-
-				res.push_back(ch);
-				break;
-			}
-			case '.': {
-				if (bFoundE) {
-					throw ParseError{
-						"Found floating point in exponent while parsing number [{}]",
-						numberString,
-					};				
-				}
-
-				if (bFoundFloatingPoint) {
-					throw ParseError{
-						"Found more than one floating point while parsing number [{}]",
-						numberString,
-					};
-				} else {
-					bFoundFloatingPoint = true;
-				}
-				
-				if (std::next(it) != numberString.end() && *std::next(it) == '\'') {
-					throw ParseError{
-						"Found a `'` right after a floating point while parsing a number"
-					};
-				}
-
-				res.push_back(ch);
-				break;
-			}
-			case '\'': {
-				if (auto const next{std::next(it)}; next == numberString.end()) {
-					throw ParseError{
-						"Found a `'` at the end of number [{}]",
-						numberString,
-					};
-				} else switch (*next) {
-				case '\'':
-					throw ParseError{"Found two `'` in a row while parsing number [{}]", numberString};
-				case '.':
-				case 'e':
-					throw ParseError{
-						"Found {} right after `'` while parsing number [{}]",
-						*next == '.' ? "a floating point" : "`e`",
-						numberString,
-					};
-				default:
-					/* Do nothing, and let the next iteration take care */
-					break;
-				}
-
-				break;
-			}
-			default: ARCALC_UNREACHABLE_CODE();
-			}
-		}
-
-		return res;
 	}
 
 	void PostfixMathEvaluator::ParseSymbolicOperator(char op) {

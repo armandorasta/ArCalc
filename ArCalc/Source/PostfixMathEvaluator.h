@@ -4,6 +4,7 @@
 #include "ValueStack.h"
 #include "Util/LiteralManager.h"
 #include "Util/FunctionManager.h"
+#include "Util/NumberParser.h"
 
 namespace ArCalc {
 	class PostfixMathEvaluator : public IEvaluator {
@@ -24,7 +25,6 @@ namespace ArCalc {
 		void ParseSymbolicOperator(char op);
 
 		void ParseNumber(char c);
-		std::string ValidateAndFixParsedNumber();
 
 		void ParseMinusSign(char c);
 		void PushLiteralValue();
@@ -59,5 +59,6 @@ namespace ArCalc {
 
 		LiteralManager& m_LitMan;
 		FunctionManager& m_FunMan;
+		NumberParser m_NumPar{};
 	};
 }

@@ -142,6 +142,7 @@
     <ClCompile Include="Source\App.cpp" />
     <ClCompile Include="Source\ArCalc.cpp" />
     <ClCompile Include="Source\Exception\ArCalcException.cpp" />
+    <ClCompile Include="Source\Util\NumberParser.cpp" />
     <ClCompile Include="Source\Util\LiteralManager.cpp" />
     <ClCompile Include="Source\Util\FunctionManager.cpp" />
     <ClCompile Include="Source\Util\IO.cpp" />
@@ -156,6 +157,7 @@
     <ClCompile Include="Source\ValueStack.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Util\NumberParser.h" />
     <ClInclude Include="Source\Util\LiteralManager.h" />
     <ClInclude Include="Source\App.h" />
     <ClInclude Include="Source\Exception\ArCalcException.h" />

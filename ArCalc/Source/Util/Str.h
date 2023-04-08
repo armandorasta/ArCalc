@@ -163,7 +163,7 @@ namespace ArCalc::Str {
 		return resNum;
 	}
 
-	template <std::integral IntType>
+	template <std::integral IntType = int>
 	constexpr IntType StringToInt(std::string_view str) {
 		return FromString<std::decay_t<IntType>>(str);
 		/*auto numberRange{str | view::drop_while(IsWhiteSpace)
@@ -193,7 +193,7 @@ namespace ArCalc::Str {
 		return static_cast<IntType>(res);*/
 	}
 
-	template <std::integral IntType>
+	template <std::integral IntType = int>
 	constexpr std::optional<IntType> StringToIntOpt(std::string_view str) {
 		// Can't be done the other way around.
 		// This function must be implemented in terms of the StringToInt because this version is not 
@@ -202,7 +202,7 @@ namespace ArCalc::Str {
 		catch (ArCalcException&) { return {}; }
 	}
 
-	template <std::floating_point FloatType>
+	template <std::floating_point FloatType = double>
 	constexpr FloatType StringToFloat(std::string_view str) {
 		return FromString<std::decay_t<FloatType>>(str);
 	}

@@ -10,14 +10,14 @@ class MathOperatorTests : public ::testing::Test {
 public:
 	inline static std::vector<char const*> const sc_MyOperators{
 		"+", "-", "*", "/",
-		"sin", "cos", "tan", "asin", "cosh",
+		"sin", "cos", "tan", "abs", "cosh",
 		">", ">=", "<", "<=", "==", "!=",
 	};
 };
 
 MATHOP_TEST(IsValid) {
 	for (auto const op : sc_MyOperators) {
-		ASSERT_TRUE(MathOperator::IsValid(op));
+		ASSERT_TRUE(MathOperator::IsValid(op)) << "Operator was: " << op;
 	}
 }
 
@@ -31,11 +31,15 @@ MATHOP_TEST(IsUnary_and_IsBinary) {
 		EXPECT_TRUE(MathOperator::IsBinary(op) || MathOperator::IsUnary(op));
 
 		if (MathOperator::IsUnary(op)) {
-			ASSERT_NO_THROW(MathOperator::EvalUnary(op, A));
-			ASSERT_NO_THROW(MathOperator::EvalUnary(op, B));
+			ASSERT_NO_THROW(MathOperator::EvalUnary(op, A)) 
+				<< "Operator: " << op << ", operand: " << A;
+			ASSERT_NO_THROW(MathOperator::EvalUnary(op, B)) 
+				<< "Operator: " << op << ", operand: " << B;
 		} else if (MathOperator::IsBinary(op)) {
-			ASSERT_NO_THROW(MathOperator::EvalBinary(op, A, B));
-			ASSERT_NO_THROW(MathOperator::EvalBinary(op, B, A));
+			ASSERT_NO_THROW(MathOperator::EvalBinary(op, A, B))
+				<< "Operator: " << op << ", operands: " << A << ", " << B;
+			ASSERT_NO_THROW(MathOperator::EvalBinary(op, B, A))
+				<< "Operator: " << op << ", operands: " << B << ", " << A;
 		}
 	}
 }

@@ -256,9 +256,9 @@ namespace ArCalc {
 		AddUnaryOperator("cel_to_fah", [](auto n) { return  n * 1.8 + 32.0; });
 		AddUnaryOperator("cel_to_kel", [](auto n) { return  n + 273.15; });
 		AddUnaryOperator("fah_to_cel", [](auto n) { return (n - 32.0) / 1.8; });
-		AddUnaryOperator("fah_to_kel", [](auto n) { return (n - 32.0) / 1.8 + 273.15; });
+		AddUnaryOperator("fah_to_kel", [](auto n) { return (n + 459.67) / 1.8; });
 		AddUnaryOperator("kel_to_cel", [](auto n) { return  n - 273.15; });
-		AddUnaryOperator("kel_to_fah", [](auto n) { return (n - 273.15) * 1.8 + 32.0; });
+		AddUnaryOperator("kel_to_fah", [](auto n) { return n * 1.8 - 459.67; });
 
 		// Energy:
 		addRatioConvOp("ev", "j", 1.6e-19);
