@@ -100,7 +100,7 @@ namespace ArCalc {
 			auto const bMinus{literalName.front() == '-'};
 			literalName = literalName.substr(bMinus ? 1U : 0U);
 			
-			if (m_LitMan.IsVisible(literalName)) {
+			if (auto const mul{bMinus ? -1.0 : 1.0}; m_LitMan.IsVisible(literalName)) {
 				if (bMinus) { // Minus sign turns it into an rvalue.
 					m_Values.PushRValue(*m_LitMan.Get(literalName) * -1.0);
 				} else {
@@ -108,11 +108,11 @@ namespace ArCalc {
 				}
 			} else if (literalName == Keyword::ToString(KeywordType::Last)) {
 				// Is is always treated as an rvalue, the user can not pass it by reference.
-				m_Values.PushRValue(*m_LitMan.Get(literalName) * (bMinus ? -1.0 : 1.0));
+				m_Values.PushRValue(*m_LitMan.Get(literalName) * mul);
 			} else if (MathConstant::IsValid(literalName)) {
-				m_Values.PushRValue(MathConstant::ValueOf(literalName) * (bMinus ? -1.0 : 1.0));
+				m_Values.PushRValue(MathConstant::ValueOf(literalName) * mul);
 			} else if (Keyword::IsValid(literalName)) {
-				// Only valid keyword in this context is _Last
+				// Only valid keyword in this context is _Last, which was already handled above.
 				throw SyntaxError{
 					"Found keyword [{}] in invalid context (in the middle of an expression)",
 					literalName

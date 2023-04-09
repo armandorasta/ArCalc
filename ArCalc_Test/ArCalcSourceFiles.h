@@ -1,7 +1,5 @@
 #pragma once
 
-#define ARCALC_SOURCE_FILES_H_
-
 // Source/Util/
 #include <Util/FunctionManager.cpp>
 #include <Util/LiteralManager.cpp>

@@ -13,7 +13,7 @@ namespace ArCalc {
 		Default      = 0U,
 		ParsingBegin = 1U,
 		FracPart     = 2U,
-		FoundExp     = 3U,
+		ExpPart     = 3U,
 		LeadingZero  = 4U,
 	};
 
@@ -52,7 +52,7 @@ namespace ArCalc {
 			SetState(St::Default);
 			return {.IsDone{false}};
 		case St::Default:
-			if (IsHexDigit(c) || IsBaseSpec(c) || c == '.' || c == '\'') {
+			if (IsHexDigit(c) || IsBaseSpec(c) || c == '.' || c == '\'' || c == '-') {
 				AddChar(c);
 				return {.IsDone{false}};
 			} else if (std::isalpha(c)) { // Alphabetic but not valid hex or base spec.
@@ -70,12 +70,12 @@ namespace ArCalc {
 				return res;
 			}
 
-			break; // Do not remove this shit.
+			break;
 		default:
 			ARCALC_UNREACHABLE_CODE();
 		};
 
-		ARCALC_UNREACHABLE_CODE();
+		ARCALC_UNREACHABLE_CODE(); // Each switch hand must exit at the end.
 	}
 
 	double NumberParser::ValidateAndFixParsedNumber() {
@@ -93,7 +93,7 @@ namespace ArCalc {
 		auto fracDigitCount = size_t{};
 
 		auto bNegativeExp{false};
-		auto expAcc = size_t{};
+		auto expAcc = std::make_signed_t<size_t>{};
 
 		if (auto const c0{numStr.front()}; IsNumberDigit(c0)) {
 			if (c0 == '0') {
@@ -152,7 +152,7 @@ namespace ArCalc {
 					break;
 				case 'e':
 					if (base == 10) {
-						st = St::FoundExp;
+						st = St::ExpPart;
 						break;
 					} 
 
@@ -197,7 +197,7 @@ namespace ArCalc {
 					};
 				case 'e':
 					if (base == 10) {
-						st = St::FoundExp;
+						st = St::ExpPart;
 						break;
 					}
 
@@ -210,7 +210,7 @@ namespace ArCalc {
 				}
 
 				break;
-			case St::FoundExp:
+			case St::ExpPart:
 				if (IsNumberDigit(c)) {
 					expAcc = expAcc * 10 + (static_cast<size_t>(c) - '0');
 				} else switch (c) {
@@ -222,6 +222,7 @@ namespace ArCalc {
 						numStr,
 					};
 
+					// Ignore it.
 					break;
 				case '\'':
 					if (auto const prev{*std::prev(it)}; prev == 'e') {
@@ -250,25 +251,8 @@ namespace ArCalc {
 			}
 		}
 
-		if (fracDigitCount > 0) {
-			myNum /= [&] {
-				auto bases{base};
-				for ([[maybe_unused]] auto const i : view::iota(1U, fracDigitCount)) {
-					bases *= base;
-				}
-				return bases;
-			}(/*)(*/);
-		}
-
-		if (expAcc > 0) {
-			for ([[maybe_unused]] auto const p : view::iota(0U, expAcc)) {
-				myNum *= 10.0;
-			}
-			if (bNegativeExp) {
-				myNum = 1.0 / myNum;
-			}
-		}
-
+		myNum /= std::pow(base, fracDigitCount);
+		myNum *= std::pow(10, bNegativeExp ?  -expAcc : expAcc);
 		return bMinus ? -myNum : myNum;
 	}
 }

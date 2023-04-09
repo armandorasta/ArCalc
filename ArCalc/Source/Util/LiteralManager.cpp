@@ -74,6 +74,10 @@ namespace ArCalc {
 		m_LitMap.insert_or_assign(name, LiteralData::Make(value));
 	}
 
+	void LiteralManager::SetMap(LiteralMap const& toWhat) {
+		m_LitMap = toWhat;
+	}
+
 	void LiteralManager::Reset() {
 		m_LitMap.clear();
 	}

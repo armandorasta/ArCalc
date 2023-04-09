@@ -79,10 +79,8 @@ namespace ArCalc {
 		size_t HeaderLineNumber;
 	};
 
-	std::ostream& operator<<(std::ostream& lhs, FuncData const& rhs);
-
 	class FunctionManager {
-	private:
+	public:
 		using FuncMap = std::unordered_map<std::string, FuncData>;
 
 	public:
@@ -100,6 +98,7 @@ namespace ArCalc {
 		void AddParam(std::string_view paramName);
 		void AddRefParam(std::string_view paramName);
 		void AddVariadicParam(std::string_view paramName);
+		void TerminateAddingParams();
 
 		void AddCodeLine(std::string_view codeLine);
 		void RemoveLastLine();
@@ -128,6 +127,8 @@ namespace ArCalc {
 
 		constexpr void ToggleOutput()          { m_bSuppressOutput ^= 1; }
 		constexpr bool IsOutputEnabled() const { return !m_bSuppressOutput; }
+
+		void CopyMapFrom(FunctionManager const& what);
 
 		void Reset();
 		void ResetCurrFunc();

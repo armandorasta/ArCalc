@@ -5,10 +5,6 @@
 #include <Util/MathOperator.h>
 #include <Util/IO.h>
 
-#ifndef ARCALC_SOURCE_FILES_H_
-#include "ArCalcSourceFiles.h"
-#endif
-
 #define EVALUATOR_TEST(_testName) TEST_F(PostfixMathEvaluatorTests, _testName)
 
 using namespace ArCalc;
@@ -81,17 +77,29 @@ EVALUATOR_TEST(Normal_number_parsing) {
 	TestBothSigns(ev, 5432.1, "5'4'32.1'0'00'0");
 	TestBothSigns(ev, 5432.1, "5432.1'0'00'0");
 
-	TestBothSigns(ev, 1e6, "1e6");
-	TestBothSigns(ev, 1e6, "1e0006");
-	TestBothSigns(ev, 1e6, "00001e0006");
-	TestBothSigns(ev, 1e6, "00'00'1e0006");
-	TestBothSigns(ev, 1e6, "00'00'1e00'06");
-	TestBothSigns(ev, 1.5e6, "1.5e6");
-	TestBothSigns(ev, 1.5e6, "1.5e0006");
-	TestBothSigns(ev, 1.5e6, "00001.50000e0006");
-	TestBothSigns(ev, 1.5e6, "00'00'1.50000e0006");
-	TestBothSigns(ev, 1.5e6, "00'00'1.50000e00'06");
-	TestBothSigns(ev, 1.5e6, "00'00'1.50'0'00e00'06"); // Man...
+	TestBothSigns(ev, 1e+6, "1e6");
+	TestBothSigns(ev, 1e-6, "1e-6");
+	TestBothSigns(ev, 1e+6, "1e0006");
+	TestBothSigns(ev, 1e-6, "1e-0006");
+	TestBothSigns(ev, 1e+6, "00001e0006");
+	TestBothSigns(ev, 1e-6, "00001e-0006");
+	TestBothSigns(ev, 1e+6, "00'00'1e0006");
+	TestBothSigns(ev, 1e-6, "00'00'1e-0006");
+	TestBothSigns(ev, 1e+6, "00'00'1e00'06");
+	TestBothSigns(ev, 1e-6, "00'00'1e-00'06");
+
+	TestBothSigns(ev, 1.5e+6, "1.5e6");
+	TestBothSigns(ev, 1.5e-6, "1.5e-6");
+	TestBothSigns(ev, 1.5e+6, "1.5e0006");
+	TestBothSigns(ev, 1.5e-6, "1.5e-0006");
+	TestBothSigns(ev, 1.5e+6, "00001.50000e0006");
+	TestBothSigns(ev, 1.5e-6, "00001.50000e-0006");
+	TestBothSigns(ev, 1.5e+6, "00'00'1.50000e0006");
+	TestBothSigns(ev, 1.5e-6, "00'00'1.50000e-0006");
+	TestBothSigns(ev, 1.5e+6, "00'00'1.50000e00'06");
+	TestBothSigns(ev, 1.5e-6, "00'00'1.50000e-00'06");
+	TestBothSigns(ev, 1.5e+6, "00'00'1.50'0'00e00'06"); // Man...
+	TestBothSigns(ev, 1.5e-6, "00'00'1.50'0'00e-00'06"); // Man...
 
 	// No multiple floating points
 	for (std::string Ones{"11111111"}; auto const i : view::iota(0U, Ones.size())) {
@@ -136,11 +144,13 @@ EVALUATOR_TEST(Normal_number_parsing) {
 	ASSERT_ANY_THROW(ev.Eval("1''1"));
 	ASSERT_ANY_THROW(ev.Eval("11.1''1"));
 	ASSERT_ANY_THROW(ev.Eval("11.1e1''1"));
+	ASSERT_ANY_THROW(ev.Eval("11.1e-1''1"));
 	
 	// No ' at the end.
 	ASSERT_ANY_THROW(ev.Eval("1234'"));
 	ASSERT_ANY_THROW(ev.Eval("1234.56'"));
 	ASSERT_ANY_THROW(ev.Eval("1234.56e78'"));
+	ASSERT_ANY_THROW(ev.Eval("1234.56e-78'"));
 
 	// No 'e' at the end.
 	ASSERT_ANY_THROW(ev.Eval("1234e"));
@@ -150,6 +160,9 @@ EVALUATOR_TEST(Normal_number_parsing) {
 	ASSERT_ANY_THROW(ev.Eval("1234'e5678"));
 	ASSERT_ANY_THROW(ev.Eval("1234e'5678"));
 	ASSERT_ANY_THROW(ev.Eval("1234'e'5678"));
+
+	// No ' right after the -.
+	ASSERT_ANY_THROW(ev.Eval("1234'e-'5678"));
 
 	// No floating points in exponent.
 	ASSERT_ANY_THROW(ev.Eval("1234e45.6"));

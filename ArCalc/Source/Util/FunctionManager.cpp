@@ -76,7 +76,6 @@ namespace ArCalc {
 	FunctionManager::FunctionManager(std::ostream& os) : m_OStream{os} {
 	}
 
-
 	bool FunctionManager::IsDefined(std::string_view name) const {
 		return m_FuncMap.contains(std::string{name});
 	}
@@ -108,9 +107,17 @@ namespace ArCalc {
 		AddParamImpl(name, true);
 	}
 
+	void FunctionManager::TerminateAddingParams() {
+		ARCALC_DA(!m_FuncMap.contains(std::string{m_CurrFuncName}),
+			"Multiple calls to FunctionManager::TerminateAddingParams");
+		// Temporarily add it to the map to allow for recursive functions.
+		m_FuncMap.emplace(m_CurrFuncName, m_CurrFuncData);
+	}
+
 	void FunctionManager::AddCodeLine(std::string_view codeLine) {
 		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::AddCodeLine outside defination");
 		ARCALC_DA(!m_CurrFuncData.Params.empty(), "Adding a function takes no arguments");
+
 		m_CurrFuncData.CodeLines.push_back(std::string{codeLine});
 	}
 
@@ -147,10 +154,12 @@ namespace ArCalc {
 		if (m_CurrFuncData.CodeLines.empty()) {
 			throw ParseError{"Adding an empty function"};
 		}
-		m_FuncMap.emplace(std::exchange(m_CurrFuncName, ""), std::exchange(m_CurrFuncData, {}));
+		m_FuncMap.insert_or_assign(std::exchange(m_CurrFuncName, ""), std::exchange(m_CurrFuncData, {}));
 	}
 
 	void FunctionManager::ResetCurrFunc() {
+		// Remove it from the map.
+		m_FuncMap.erase(m_CurrFuncName);
 		m_CurrFuncName = {};
 		m_CurrFuncData = {};
 	}
@@ -163,7 +172,11 @@ namespace ArCalc {
 		return m_CurrFuncName;
 	}
 
-	void FunctionManager::Reset() { 
+	void FunctionManager::CopyMapFrom(FunctionManager const& what) {
+		m_FuncMap = what.m_FuncMap;
+	}
+
+	void FunctionManager::Reset() {
 		ResetCurrFunc();
 		m_FuncMap.clear(); 
 	}
@@ -176,7 +189,7 @@ namespace ArCalc {
 		ARCALC_DA(m_CurrFuncData.CodeLines.empty(), 
 			"Tried to add a parameter after adding a code line");
 
-		// No doublicates please
+		// No doublicates please.
 		auto const paramNameOwned = std::string{paramName};
 		if (auto const it{range::find(m_CurrFuncData.Params, paramNameOwned, &ParamData::GetName)};
 			it != m_CurrFuncData.Params.end())
@@ -186,9 +199,10 @@ namespace ArCalc {
 			};
 		}
 
-		m_CurrFuncData.Params.push_back(m_bReference 
-			? ParamData::MakeByRef(paramName) 
-			: ParamData::MakeByValue(paramName, bParameterPack));
+		auto const param{m_bReference
+			? ParamData::MakeByRef(paramName)
+			: ParamData::MakeByValue(paramName, bParameterPack)};
+		m_CurrFuncData.Params.emplace_back(param);
 		m_CurrFuncData.IsVariadic = bParameterPack;
 	}
 
@@ -205,6 +219,10 @@ namespace ArCalc {
 		ARCALC_DA(IsDefined(funcName), "Call of undefined function [{}]", funcName);
 
 		auto& func{Get(funcName)};
+		if (func.CodeLines.empty()) { // Recursive call while validating, just return anything.
+			return 0.0;
+		}
+
 		if (func.IsVariadic) {
 			ARCALC_NOT_IMPLEMENTED("Variadic functions");
 
@@ -214,8 +232,30 @@ namespace ArCalc {
 			// }
 		}
 
-		auto subParser = Parser{m_OStream, func.Params, false};
-		if (!IsOutputEnabled()) {
+		auto const paramMap = [&] {
+			auto res = LiteralManager::LiteralMap{};
+			for (auto const& param : func.Params) {
+				if (param.IsPassedByRef()) {
+					res.emplace(param.GetName(), LiteralData::MakeRef(param.GetRef()));
+				} else {
+					res.emplace(param.GetName(), LiteralData::Make(param.GetValue()));
+
+					if (param.IsParameterPack()) {
+						ARCALC_NOT_IMPLEMENTED("Parameter packs");
+						// Avoid doublicating the first argument in the pack.
+						//                            vvvv
+						// for (auto const i : view::iota(1U, param.Values.size())) {
+						// 	m_LitMan.SetLiteralByValue(Str::Mangle(param.Name, i), param.Values[i]);
+						// }
+					}
+				}
+			}
+
+			return res;
+		}(/*)(*/);
+
+		auto subParser = Parser{m_OStream, *this, paramMap};
+		if (subParser.IsOutputEnabled()) {
 			subParser.ToggleOutput();
 		}
 

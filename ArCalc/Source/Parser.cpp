@@ -74,58 +74,29 @@ namespace ArCalc {
 		m_LitMan.SetLast(0.0);
 	}
 
-	Parser::Parser(std::ostream& os, std::vector<ParamData>& paramData, bool bValidation) : Parser{os} {
+	Parser::Parser(std::ostream& os, FunctionManager const& funMan, 
+		LiteralManager::LiteralMap const& litMap) : Parser{os} 
+	{
 		m_bInFunction = true;
-
-#ifndef NDEBUG
-		for (auto const& param : paramData) {
-			ExpectIdentifier(param.GetName());
-		}
-#endif // ^^^^ Debug mode only.
-
-		if (bValidation) {
-			// Validation will make all parameter packs have size 1 for now, because the sub-parser 
-			// will evaluate all branches anyway.
-
-			// The evaluator, however, is still unable to deal with parameter packs...
-			// TODO: fix that.
-			for (auto const& param : paramData) {
-				if (param.IsPassedByRef()) {
-					m_LitMan.Add(param.GetName(), param.GetRef());
-				} 
-				else m_LitMan.Add(param.GetName(), 0.f);
-			}
-		} else for (auto const& param : paramData) {
-			if (param.IsPassedByRef()) {
-				m_LitMan.Add(param.GetName(), param.GetRef());
-			} else {
-				m_LitMan.Add(param.GetName(), param.GetValue());
-
-				if (param.IsParameterPack()) {
-					ARCALC_NOT_IMPLEMENTED("Parameter packs");
-					// Avoid doublicating the first argument in the pack.
-					//                            vvvv
-					// for (auto const i : view::iota(1U, param.Values.size())) {
-					// 	m_LitMan.SetLiteralByValue(Str::Mangle(param.Name, i), param.Values[i]);
-					// }
-				}
-			}
-		}
+		m_FunMan.CopyMapFrom(funMan);
+		m_LitMan.SetMap(litMap);
 	}
 
 	void Parser::ParseFile(fs::path const& filePath) {
 		if (std::ifstream file{filePath}; file.is_open()) {
 			ParseIStream(file);
+		} else {
+			throw ParseError{"Parser::ParseFile on Invalid file [{}]", filePath.string()};
 		}
-		else throw ParseError{"Parser::ParseFile on Invalid file [{}]", filePath.string()};
 	}
 
 	void Parser::ParseFile(fs::path const& filePath, fs::path const& outFilePath) {
-		if (std::ifstream file{filePath}; !file.is_open()) {
+		if (std::ifstream file{filePath}; file.is_open()) {
 			std::ofstream outFile{outFilePath};
 			ParseIStream(file, outFile);
+		} else {
+			throw ParseError{"Parser::ParseFile on Invalid file [{}]", filePath.string()};
 		}
-		else throw ParseError{"Parser::ParseFile on Invalid file [{}]", filePath.string()};
 	}
 
 	void Parser::ParseIStream(std::istream& is) {
@@ -152,7 +123,7 @@ namespace ArCalc {
 		}
 
 		switch (auto const state{GetState()}; state) {
-		case St::Val_LineCollection: {
+		case St::Val_LineCollection:
 			try { 
 				m_pValSubParser->ParseLine(line); 
 				switch (m_pValSubParser->GetState()) {
@@ -185,14 +156,14 @@ namespace ArCalc {
 					m_FunMan.CurrHeaderLineNumber());
 				throw;
 			} 
+
 			break;
-		}
 		case St::IfNewLine:
 		case St::ElifNewLine:
 		case St::ElseNewLine: 
 		case St::Val_IfNewLine: 
 		case St::Val_ElifNewLine: 
-		case St::Val_ElseNewLine: {
+		case St::Val_ElseNewLine:
 			if (m_CurrentLine.empty()) {
 				break;
 			}
@@ -215,17 +186,16 @@ namespace ArCalc {
 				}(/*)(*/),
 				IsValSt(state) || !m_bSelectionBlockExecuted && m_bConditionRegister.ValueOr(true)
 			);
+
 			break;
-		}
 		case St::Val_SubParser:
-		default: {
+		default:
 			if (m_CurrentLine.empty()) {
 				break;
 			}
 
 			HandleFirstToken();
 			break;
-		}
 		}
 
 		IncrementLineNumber();
@@ -445,8 +415,31 @@ namespace ArCalc {
 			}
 		}
 
+		// Quite unfortunate this function has to exist, I am just too lazy to work out 
+		// any other way -_-
+		m_FunMan.TerminateAddingParams();
+
+		auto const paramMap = [&] {
+			// Validation will make all parameter packs have size 1 for now, because the sub-parser 
+			// will evaluate all branches anyway.
+
+			// The evaluator, however, is still unable to deal with parameter packs...
+			// TODO: fix that.
+			auto res = LiteralManager::LiteralMap{};
+			for (auto const& param : m_FunMan.CurrParamData()) {
+				if (param.IsPassedByRef()) {
+					res.emplace(param.GetName(), LiteralData::MakeRef(param.GetRef()));
+				} else {
+					res.emplace(param.GetName(), LiteralData::Make(0.f));
+				}
+			}
+
+			return res;
+		}(/*)(*/);
+
 		// Check function body for syntax errors.
-		m_pValSubParser = std::make_unique<Parser>(m_ValidationStringStream, m_FunMan.CurrParamData(), true);
+		m_pValSubParser = std::make_unique<Parser>(std::cout, m_FunMan, paramMap);
+		m_pValSubParser->ToggleOutput();
 		m_pValSubParser->SetState(St::Val_SubParser);
 		SetState(St::Val_LineCollection);
 	}

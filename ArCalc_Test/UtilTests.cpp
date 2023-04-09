@@ -3,8 +3,6 @@
 #include <Util/Util.h>
 #include <Util/Random.h>
 
-#include "ArCalcSourceFiles.h"
-
 #define UTIL_TEST(_testName) TEST_F(UtilTests, _testName)
 
 using namespace ArCalc;

@@ -7,7 +7,6 @@
 
 /* Minimum amount of features to start working on the console interface:
 	* Add the _Clear keyword (clears the damn console). (probably not gonna happen)
-	* Add hexadecimal, binary and octal number parsing.
 	* Add Current session serialization {
 		* Maybe by not passing anything to the _Save keyword, it will serialize the current
 		  session to disk?
@@ -136,7 +135,8 @@ namespace ArCalc {
 		auto operator=(Parser&&)      = delete;
 
 		Parser(std::ostream& os);
-		Parser(std::ostream& os, std::vector<ParamData>& paramData, bool bValidation);
+		Parser(std::ostream& os, FunctionManager const& funMan, 
+			LiteralManager::LiteralMap const& litMap);
 
 		static void ParseFile(fs::path const& filePath);
 		static void ParseFile(fs::path const& filePath, fs::path const& outFilePath);
@@ -234,8 +234,6 @@ namespace ArCalc {
 		std::optional<double> m_ReturnValueRegister{};        // Value: for execution.
 		std::optional<FuncReturnType> m_ReturnTypeRegister{}; // Type : for validation.
 
-		// So the validator does not output anything while the function is being defined.
-		std::stringstream m_ValidationStringStream{}; 
 		std::unique_ptr<Parser> m_pValSubParser{};
 
 		bool m_bSuppressOutput{};

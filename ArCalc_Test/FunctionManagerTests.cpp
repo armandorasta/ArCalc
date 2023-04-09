@@ -9,12 +9,11 @@
 using namespace ArCalc;
 
 class FunctionManagerTests : public testing::Test {
-private:
-	inline static std::stringstream s_BullshitSS{};
-
 public:
 	FunctionManager GenerateTestingInstance() {
-		return FunctionManager{s_BullshitSS};
+		auto funMan = FunctionManager{std::cout};
+		funMan.ToggleOutput();
+		return funMan;
 	}
 
 protected:

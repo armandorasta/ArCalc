@@ -244,6 +244,66 @@ PARSER_TEST(Executing_a_function_with_refs) {
 	ASSERT_DOUBLE_EQ(5.0, *litMan.Get("b"));
 }
 
+PARSER_TEST(Nested_function_calls_no_refs) {
+	auto par{GenerateTestingInstance()};
+
+	par.ParseLine("_Func Identity n;");
+	par.ParseLine("    _Return n;");
+
+	par.ParseLine("_Func AddOne n;");
+	ASSERT_NO_THROW(par.ParseLine("    _Return n Identity 1 +;"));
+
+	ASSERT_NO_THROW(par.ParseLine("_Func AddOneThenDouble n;"));
+	ASSERT_NO_THROW(par.ParseLine("    _Return n AddOne Identity 2 *;"));
+
+	ASSERT_NO_THROW(par.ParseLine("5 AddOneThenDouble;"));
+	ASSERT_DOUBLE_EQ((5.0 + 1.0) * 2.0, par.GetLitMan().GetLast());
+}
+
+PARSER_TEST(Nested_function_calls_with_refs) {
+	auto par{GenerateTestingInstance()};
+
+	par.ParseLine("_Func Setter &lhs rhs;");
+	par.ParseLine("_Set lhs rhs;");
+	par.ParseLine("_Return;");
+
+	par.ParseLine("_Func AddOne n;");
+	par.ParseLine("    _Set res 0;");
+	ASSERT_NO_THROW(par.ParseLine("    res n Setter;"));
+	ASSERT_NO_THROW(par.ParseLine("    _Return res 1 +;"));
+
+	ASSERT_NO_THROW(par.ParseLine("_Func AddOneThenDouble n;"));
+	ASSERT_NO_THROW(par.ParseLine("    _Set res 0;"));
+	ASSERT_NO_THROW(par.ParseLine("    res n Setter;"));
+	ASSERT_NO_THROW(par.ParseLine("    _Return res AddOne 2 *;"));
+
+	ASSERT_NO_THROW(par.ParseLine("5 AddOneThenDouble;"));
+	ASSERT_DOUBLE_EQ(12.0, par.GetLitMan().GetLast());
+}
+
+PARSER_TEST(Recursive_functions) {
+	auto par{GenerateTestingInstance()};
+
+	par.ParseLine("_Func MyFac n;");
+	par.ParseLine("_If n 1 <=: _Return 1;");
+	CHECK_ASSERT_NO_THROW(par.ParseLine("_Return n 1 - MyFac n *;"));
+
+	constexpr auto fac = [](auto n) constexpr {
+		if (n <= 1) {
+			n = 1;
+		} else for (auto const i : view::iota(1U, n)) {
+			n *= i;
+		}
+
+		return n;
+	};
+
+	for (auto const i : view::iota(0U, 10U)) {
+		ASSERT_NO_THROW(par.ParseLine(std::format("{} MyFac", i)));
+		ASSERT_DOUBLE_EQ(fac(i), par.GetLitMan().GetLast()) << "Param is: " << i;
+	}
+}
+
 PARSER_TEST(Passing_through_a_by_value_param) {
 	constexpr std::array Lines{
 		"_Func FuncByValue param",

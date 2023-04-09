@@ -50,7 +50,7 @@ namespace ArCalc {
 	};
 
 	class LiteralManager {
-	private:
+	public:
 		using LiteralMap = std::unordered_map<std::string, LiteralData>;
 
 	public:
@@ -79,6 +79,8 @@ namespace ArCalc {
 
 		constexpr void ToggleOutput()          { m_bSuppressOutput ^= 1; }
 		constexpr bool IsOutputEnabled() const { return !m_bSuppressOutput; }
+
+		void SetMap(LiteralMap const& toWhat);
 
 		void Reset();
 
