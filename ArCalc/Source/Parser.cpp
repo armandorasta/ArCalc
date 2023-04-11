@@ -288,16 +288,10 @@ namespace ArCalc {
 		auto const litName{Str::ChopFirstToken<std::string_view>(m_CurrentLine)};
 		ExpectIdentifier(litName);
 
-		if (MathConstant::IsValid(litName) ||
-			MathOperator::IsValid(litName) ||
-			m_FunMan.IsDefined(litName)) 
-		{
+		if (m_FunMan.IsDefined(litName)) { // Literals override constants and operators.
 			throw SyntaxError{
 				"Can not define a literal with the name {}, "
-				"because {} with that name already exists.",
-				MathConstant::IsValid(litName) ? "a math constant" : 
-				MathOperator::IsValid(litName) ? "an operator" : 
-				                                 "a function",
+				"because a function with that name already exists.",
 				litName,
 			};
 		} 
@@ -306,17 +300,34 @@ namespace ArCalc {
 			if (auto const opt{Eval(m_CurrentLine)}; opt.has_value()) {
 				return *opt;
 			} else throw ParseError{
-				"Setting literal [{}] to an expression returns none.\n"
-				"The expression was most probably a function returns None",
+				"Setting literal [{}] to an expression returns none.\n",
 				litName
 			};
 		}(/*)(*/);
 
-		if (m_LitMan.IsVisible(litName)) { *m_LitMan.Get(litName) = value; } 
-		else                             { m_LitMan.Add(litName, value); }
+		if (m_LitMan.IsVisible(litName)) { 
+			*m_LitMan.Get(litName) = value; 
+		} else { 
+			m_LitMan.Add(litName, value); 
+		}
 
 		if (state == St::Default || IsSelSt(state)) {
 			Print("{} = {}\n", litName, value);
+			if (MathConstant::IsValid(litName)) {
+				Print("Shadowing constant {} ({})", litName, MathConstant::ValueOf(litName));
+			} else if (MathOperator::IsValid(litName)) {
+				Print("Shadowing {} operator {}", [&] {
+					if (MathOperator::IsUnary(litName)) {
+						return "unary";
+					} else if (MathOperator::IsBinary(litName)) {
+						return "binary";
+					} else if (MathOperator::IsVariadic(litName)) {
+						return "variadic";
+					} else {
+						ARCALC_UNREACHABLE_CODE();
+					}
+				}(/*)(*/), litName);
+			}
 		}
 	}
 
@@ -362,16 +373,12 @@ namespace ArCalc {
 		auto& funcName = tokens[1];
 		ExpectIdentifier(funcName);
 
-		if (MathConstant::IsValid(funcName) ||
-			MathOperator::IsValid(funcName) ||
-			m_LitMan.IsVisible(funcName)) 
-		{
+
+		if (m_LitMan.IsVisible(funcName)) {
+			// Functions shadow constants and operators.
 			throw SyntaxError{
 				"Can not define a function with the name {}, "
-				"because {} with that name already exists.",
-				MathConstant::IsValid(funcName) ? "a math constant" : 
-				MathOperator::IsValid(funcName) ? "an operator" : 
-				                                  "a literal",
+				"because a literal with that name already exists.",
 				funcName,
 			};
 		} 
@@ -877,11 +884,7 @@ namespace ArCalc {
 			};
 		} else if (Keyword::IsValid(what)) {
 			throw SyntaxError{"Expected identifier, but found keyword ({})", what};
-		} else if (MathConstant::IsValid(what)) {
-			throw SyntaxError{
-				"Expected identifier, but found math constant ({})", what
-			};
-		}
+		} 
 
 		for (auto const c : what) {
 			if (!Str::IsAlNum(c) && c != '_') {

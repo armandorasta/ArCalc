@@ -92,19 +92,19 @@ namespace ArCalc {
 		/* **** Order of checks ****
 		 * 1) Literals (and the Last keyword).
 		 * 2) Functions.
-		 * 3) Constants.
-		 * 4) Operators.
+		 * 3) Constants and operators.
 		 * 
 		 * Due to conventions, constant and operator names will never overlap, 
 		 * and thus the order of thier checks will not make a difference.
-		*/
+		 */
 
 		// Finished parsing, evaluating...
 		std::string identifier{GetString()};
 
-		// Strip the negative sign for lookup.
 		auto const bMinus{identifier.front() == '-'};
-		identifier = identifier.substr(bMinus ? 1U : 0U);
+		if (bMinus) { // Strip the negative sign for lookup.
+			identifier = identifier.substr(1);
+		}
 
 		if (m_LitMan.IsVisible(identifier)) {
 			if (bMinus) { // Minus sign turns it into an rvalue.
@@ -115,14 +115,14 @@ namespace ArCalc {
 		} else if (identifier == Keyword::ToString(KeywordType::Last)) {
 			// Is is always treated as an rvalue, the user can not pass it by reference.
 			m_Values.PushRValue(*m_LitMan.Get(identifier) * (bMinus ? -1.0 : 1.0));
-		} else if (MathConstant::IsValid(identifier)) {
-			m_Values.PushRValue(MathConstant::ValueOf(identifier) * (bMinus ? -1.0 : 1.0));
-		} else if (m_FunMan.IsDefined(identifier)) { // Check function names first.
+		} else if (m_FunMan.IsDefined(identifier)) {
 			if (bMinus) {
 				throw ExprEvalError{"Found function name [{}] preceeded by a minus sign"};
 			} else {
 				EvalFunction();
 			}
+		} else if (MathConstant::IsValid(identifier)) {
+			m_Values.PushRValue(MathConstant::ValueOf(identifier) * (bMinus ? -1.0 : 1.0));
 		} else if (MathOperator::IsValid(identifier)) { 
 			if (bMinus) {
 				throw ExprEvalError{"Found operator name [{}] preceeded by a minus sign"};

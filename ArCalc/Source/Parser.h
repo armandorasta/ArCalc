@@ -26,6 +26,7 @@
 		_Func Accumulate min max init _Func.. pred;
 			_If min max >: _Return init;
 			_Else _Return min 1 + max init min pred DoForEach;
+		// TODO: make this ^^^ an operator 
 
 		1 5 0 _Func acc curr: acc curr +; Accumulate; // This outputs 15.
 		1 5 1 _Func acc curr: acc curr *; Accumulate; // This outputs 5! = 120.

@@ -62,7 +62,12 @@ namespace ArCalc {
 		return s_Operators.at(std::string{op}).Func(operands);
 	}
 
-	bool MathOperator::CheckHelper(std::string_view op, OT type, std::string_view funcName) {
+#ifdef NDEBUG
+	bool MathOperator::CheckHelper(std::string_view op, OT type, std::string_view) 
+#else
+	bool MathOperator::CheckHelper(std::string_view op, OT type, std::string_view funcName) 
+#endif
+	{
 		ARCALC_DA(IsValid(op), "MathOperator::{} invalid operator: {}", funcName, op);
 		return s_Operators.at(std::string{op}).Type & type;
 	}

@@ -60,7 +60,7 @@ namespace ArCalc {
 			}
 		}
 
-		bool IsValidNumberToken(char c) {
+		constexpr bool IsValidNumberToken(char c) {
 			return IsHexDigit(c)
 				|| IsBaseSpec(c)
 				|| c == '.'

@@ -138,7 +138,9 @@ namespace ArCalc {
 #define ARCALC_DE(_message, ...)
 
 #define ARCALC_NOT_POSSIBLE(_alwaysFalse)  
-#define ARCALC_UNREACHABLE_CODE()
+#define ARCALC_UNREACHABLE_CODE() throw
+
+
 #define ARCALC_NOT_IMPLEMENTED(_whatIsNotImplemented)
 
 #else // ^^^^ Release, vvvv Debug
@@ -155,12 +157,12 @@ namespace ArCalc {
 #define ARCALC_DE(_message, ...) ARCALC_DA(false, _message, __VA_ARGS__)
 
 #define ARCALC_NOT_POSSIBLE(_alwaysFalse) \
-	ARCALC_DA(!(_alwaysFalse), "Program reached a state assumed to be impossible")
+	ARCALC_DA(!(_alwaysFalse), "Impossible code path")
 
 #define ARCALC_UNREACHABLE_CODE() \
-	ARCALC_DE("Program managed to flow through an unreachable code path")
+	ARCALC_DE("Uunreachable code path")
 
 #define ARCALC_NOT_IMPLEMENTED(_whatIsNotImplemented) \
-	ARCALC_DE("Program managed to flow through a code path not implemented yet: " _whatIsNotImplemented);
+	ARCALC_DE("Unimplemented code path: " _whatIsNotImplemented);
 
 #endif // NDEBUG

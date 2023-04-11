@@ -4,6 +4,7 @@
 #include "Util/Str.h"
 #include <Util/IO.h>
 #include <Util/Random.h>
+#include <Util/MathConstant.h>
 
 #include "TestingHelperMacros.h"
 
@@ -95,20 +96,78 @@ PARSER_TEST(Set_statement_and_literal_name_clashes) {
 	auto& litMan{par.GetLitMan()};
 
 	par.ParseLine("_Set x 5;");
-	ASSERT_TRUE(par.IsLineEndsWithSemiColon());
 	ASSERT_TRUE(litMan.IsVisible("x"));
 	ASSERT_DOUBLE_EQ(5.0, *litMan.Get("x"));
+}
 
-	// Constants may not be overriden.
-	ASSERT_ANY_THROW(par.ParseLine("_Set _pi 5.0"));
+PARSER_TEST(Name_collisions) {
+	auto par{GenerateTestingInstance()};
 
 	// Already defined functions may not be overriden.
 	par.ParseLine("_Func MyFunc param");
 	par.ParseLine("_Return;");
-	ASSERT_ANY_THROW(par.ParseLine("_Set MyFunc 5.0"));
+	ASSERT_ANY_THROW(par.ParseLine("_Set MyFunc 5.0;"));
 
-	// Built in operators may not be overriden.
-	ASSERT_ANY_THROW(par.ParseLine("_Set abs 5.0"));
+	// ...Unless unscoped.
+	par.ParseLine("_Unscope MyFunc");
+	ASSERT_NO_THROW(par.ParseLine("_Set MyFunc 5.0;"));
+}
+
+PARSER_TEST(Shadowing_constants_with_literals) {
+	auto par{GenerateTestingInstance()};
+
+	ASSERT_NO_THROW(par.ParseLine("_Set _pi 5.0;"));
+	ASSERT_TRUE(par.GetLitMan().IsVisible("_pi"));
+	ASSERT_DOUBLE_EQ(5.0, *par.GetLitMan().Get("_pi"));
+
+	// Unscoping makes the constant visible again.
+	ASSERT_NO_THROW(par.ParseLine("_Unscope _pi;"));
+	par.ParseLine("_pi");
+	ASSERT_DOUBLE_EQ(MathConstant::ValueOf("_pi"), par.GetLitMan().GetLast());
+}
+
+PARSER_TEST(Shadowing_constants_with_functions) {
+	auto par{GenerateTestingInstance()};
+
+	ASSERT_NO_THROW(par.ParseLine("_Func _pi n")); // Will never happen tho...
+	ASSERT_NO_THROW(par.ParseLine("_Return n 2 *;"));
+	ASSERT_TRUE(par.GetFunMan().IsDefined("_pi"));
+	ASSERT_NO_THROW(par.ParseLine("5 _pi;")) << "_pi should've been treated like a function";
+	ASSERT_DOUBLE_EQ(10.0, par.GetLitMan().GetLast());
+
+	// Unscoping makes the constant visible again.
+	ASSERT_NO_THROW(par.ParseLine("_Unscope _pi;"));
+	par.ParseLine("_pi");
+	ASSERT_DOUBLE_EQ(MathConstant::ValueOf("_pi"), par.GetLitMan().GetLast());
+}
+
+PARSER_TEST(Shadowing_operators_with_literals) {
+	auto par{GenerateTestingInstance()};
+
+	ASSERT_NO_THROW(par.ParseLine("_Set abs 5.0;"));
+	ASSERT_TRUE(par.GetLitMan().IsVisible("abs"));
+	par.ParseLine("abs;");
+	ASSERT_DOUBLE_EQ(5.0, par.GetLitMan().GetLast());
+
+	// Unscoping makes the operator usable again.
+	ASSERT_NO_THROW(par.ParseLine("_Unscope abs;"));
+	par.ParseLine("-5.0 abs;");
+	ASSERT_DOUBLE_EQ(std::abs(5.0), par.GetLitMan().GetLast());
+}
+
+PARSER_TEST(Shadowing_operators_with_functions) {
+	auto par{GenerateTestingInstance()};
+
+	ASSERT_NO_THROW(par.ParseLine("_Func abs n")); // Will never happen tho...
+	ASSERT_NO_THROW(par.ParseLine("_Return n 2 *;"));
+	ASSERT_TRUE(par.GetFunMan().IsDefined("abs"));
+	par.ParseLine("5 abs;");
+	ASSERT_DOUBLE_EQ(10.0, par.GetLitMan().GetLast());
+
+	// Unscoping makes the operator usable again.
+	ASSERT_NO_THROW(par.ParseLine("_Unscope abs;"));
+	par.ParseLine("-5 abs");
+	ASSERT_DOUBLE_EQ(5.0, par.GetLitMan().GetLast());
 }
 
 PARSER_TEST(Set_statement_setting_a_literal_more_than_once) {
@@ -120,27 +179,6 @@ PARSER_TEST(Set_statement_setting_a_literal_more_than_once) {
 		ASSERT_NO_THROW(par.ParseLine(std::format("_Set {} {};", VarName, i)));
 		ASSERT_DOUBLE_EQ(i, *par.GetLitMan().Get(VarName));
 	}
-}
-
-PARSER_TEST(Function_name_clashes) {
-	auto par{GenerateTestingInstance()};
-
-	// Functions my not be overriden or overloaded.
-	par.ParseLine("_Func MyFunc param");
-	par.ParseLine("_Return;");
-	ASSERT_ANY_THROW(par.ParseLine("_Func MyFunc param1 param2"));
-
-	// Function and literal names may not clash.
-	par.ParseLine("_Set myVar 5.0;");
-	ASSERT_ANY_THROW(par.ParseLine("_Func myVar param"));
-
-	// Function and constant names may not clash.
-	// Simple don't prefix your function names with an underscore.
-	ASSERT_ANY_THROW(par.ParseLine("_Func _pi param"));
-	
-	// Function and operator names may not clash.
-	// To avoid this, simply start all your function names with a capital letter.
-	ASSERT_ANY_THROW(par.ParseLine("_Func sign param"));
 }
 
 PARSER_TEST(Defining_a_function_with_no_refs) {

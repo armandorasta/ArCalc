@@ -59,8 +59,10 @@ MATHOP_TEST(EvalBinary) {
 	test("/", [](double l, double r) { return l / r; });
 	test("max", [](double l, double r) { return std::max(l, r); });
 
+#ifndef NDEBUG
 	// Evaluating unary function using EvalBinary
 	ASSERT_ANY_THROW(MathOperator::EvalBinary("sin", A, B));
+#endif // ^^^^ Debug mode only.
 }
 
 MATHOP_TEST(EvalUnary) {
@@ -76,6 +78,8 @@ MATHOP_TEST(EvalUnary) {
 	test("negate", [](double o) { return -o; });
 	test("abs",    [](double o) { return std::abs(o); });
 
+#ifndef NDEBUG
 	// Evaluating unary function using EvalBinary
 	ASSERT_ANY_THROW(MathOperator::EvalUnary("+", A));
+#endif // ^^^^ Debug mode only.
 }
