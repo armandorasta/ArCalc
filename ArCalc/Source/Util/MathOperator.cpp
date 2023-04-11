@@ -3,11 +3,10 @@
 
 namespace ArCalc {
 	enum class MathOperatorType : size_t {
-		Unary = 0b0001,
-		Binary = 0b0010,
-		Ternary = 0b0100,
-
-		UnaryOrBinary = Unary | Binary,
+		Unary    = 1UI64 << 0U,
+		Binary   = 1UI64 << 1U,
+		Ternary  = 1UI64 << 2U,
+		Variadic = 1UI64 << 3U,
 	};
 
 	MathOperator const MathOperator::s_InitializationInstance{};
@@ -34,37 +33,43 @@ namespace ArCalc {
 	}
 
 	bool MathOperator::IsUnary(std::string_view op) {
-		ARCALC_DA(IsValid(op), "[IsUnary] Invalid operator: {}", op);
-		return s_Operators.at(std::string{op}).Type & OT::Unary;
+		return CheckHelper(op, OT::Unary, "IsUnary");
 	}
 
 	bool MathOperator::IsBinary(std::string_view op) {
-		ARCALC_DA(IsValid(op), "[IsBinary] Invalid operator: {}", op);
-		return s_Operators.at(std::string{op}).Type & OT::Binary;
+		return CheckHelper(op, OT::Binary, "IsBinary");
+	}
+
+	bool MathOperator::IsVariadic(std::string_view op) {
+		return CheckHelper(op, OT::Variadic, "IsVariadic");
 	}
 
 	double MathOperator::EvalBinary(std::string_view op, double lhs, double rhs) {
-		if (!IsValid(op)) {
-			throw ExprEvalError{"[EvalBinary] Invalid operator: {}", op};
-		} else if (!IsBinary(op)) {
-			throw ExprEvalError{"Evaluating non-binary operator [{}] using EvalBinary", op};
-		}
-
+		ARCALC_DA(IsValid(op), "MathOperator::EvalBinary on invalid operator: [{}]", op);
+		ARCALC_DA(IsBinary(op), "MathOperator::EvalBinary on non-binary operator: [{}]", op);
 		return s_Operators.at(std::string{op}).Func({lhs, rhs});
 	}
 
 	double MathOperator::EvalUnary(std::string_view op, double operand) {
-		if (!IsValid(op)) {
-			throw ExprEvalError{"[EvalUnary] Invalid operator: {}", op};
-		} else if (!IsUnary(op)) {
-			throw ExprEvalError{"Evaluating non-unary [{}] operator using EvalUnary", op};
-		}
-
+		ARCALC_DA(IsValid(op), "MathOperator::EvalUnary invalid operator: [{}]", op);
+		ARCALC_DA(IsUnary(op), "MathOperator::EvalUnary on non-unary operator: [{}]", op);
 		return s_Operators.at(std::string{op}).Func({operand});
 	}
 
+	double MathOperator::EvalVariadic(std::string_view op, std::vector<double> const& operands) {
+		ARCALC_DA(IsValid(op), "MathOperator::EvalVariadic invalid operator: [{}]", op);
+		ARCALC_DA(IsVariadic(op), "MathOperator::EvalVariadic on non-variadic operator: [{}]", op);
+		return s_Operators.at(std::string{op}).Func(operands);
+	}
+
+	bool MathOperator::CheckHelper(std::string_view op, OT type, std::string_view funcName) {
+		ARCALC_DA(IsValid(op), "MathOperator::{} invalid operator: {}", funcName, op);
+		return s_Operators.at(std::string{op}).Type & type;
+	}
+
 	void MathOperator::AddOperator(std::string const& glyph, OT type,
-		std::function<double(std::vector<double>const&)>&& func) {
+		std::function<double(std::vector<double>const&)>&& func) 
+	{
 		s_Operators.insert({glyph,{type, std::move(func)}});
 	}
 
@@ -74,18 +79,28 @@ namespace ArCalc {
 		});
 	}
 
-	void MathOperator::AddBinaryOperator(std::string const& glyph, std::function<double(double, double)>&& func) {
+	void MathOperator::AddBinaryOperator(std::string const& glyph, 
+		std::function<double(double, double)>&& func) 
+	{
 		AddOperator(glyph, OT::Binary, [func = std::move(func)](auto const& operands) {
 			return func(operands[0], operands[1]);
 		});
 	}
 
 	void MathOperator::AddTernaryOperator(std::string const& glyph,
-		std::function<double(double, double, double)>&& func) {
+		std::function<double(double, double, double)>&& func) 
+	{
 		AddOperator(glyph, OT::Ternary, [func = std::move(func)](auto const& operands) {
 			return func(operands[0], operands[1], operands[2]);
 		});
 	}
+
+	void MathOperator::AddVariadicOperator(std::string const& glyph,
+		std::function<double(std::vector<double> const&)>&& func) 
+	{
+		AddOperator(glyph, OT::Variadic, std::move(func));
+	}
+
 
 	void MathOperator::AddBasicOperators() {
 		// Arithmatic
@@ -139,6 +154,14 @@ namespace ArCalc {
 			}
 
 			return static_cast<double>(std::gcd(static_cast<size_t>(l), static_cast<size_t>(r)));
+		});
+
+		AddVariadicOperator("sum", [](auto const& operands) {
+			return std::accumulate(operands.begin(), operands.end(), 0.0);
+		});
+
+		AddVariadicOperator("mul", [](auto const& operands) {
+			return std::accumulate(operands.begin(), operands.end(), 1.0, std::multiplies<>{});
 		});
 
 		// Unary

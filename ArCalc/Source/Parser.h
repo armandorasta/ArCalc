@@ -6,6 +6,37 @@
 #include "Util/LiteralManager.h"
 
 /* Minimum amount of features to start working on the console interface:
+	* Make user defined literals and functions take piority {
+		* If we have a literal called abs, it will shadow the abs operator until unscoped.
+		* Same goes for user functions, even though these should never overlap with anything.
+	}
+	* Add the _Error keyword {
+		* Lets you exit a function with an error message for invalid input.
+		* Create a new exception type for these type of errors.
+	}
+	* Change the _Unscope keyword {
+		* It just undoes the last line by default, and only when supplied a `*` 
+		  just after, it will cancel the current scope.
+		* Or maybe when supplied the keyword that initiates the scope instead? can't decide.
+	}
+	* Add a variation to the _Func keyword {
+		* It can define lambdas inline, which can be passed to functions.
+
+		// Same as std::acumulate
+		_Func Accumulate min max init _Func.. pred;
+			_If min max >: _Return init;
+			_Else _Return min 1 + max init min pred DoForEach;
+
+		1 5 0 _Func acc curr: acc curr +; Accumulate; // This outputs 15.
+		1 5 1 _Func acc curr: acc curr *; Accumulate; // This outputs 5! = 120.
+
+		* When defining the parmeter: a dot means by value, and a & means by reference {
+			_Func..   => takes two arguments by value.
+			_Func&..  => by ref, by value, by value.
+
+			This is done to prevent this language from becoming like javaScript.
+		}
+	}
 	* Add the _Clear keyword (clears the damn console). (probably not gonna happen)
 	* Add Current session serialization {
 		* Maybe by not passing anything to the _Save keyword, it will serialize the current

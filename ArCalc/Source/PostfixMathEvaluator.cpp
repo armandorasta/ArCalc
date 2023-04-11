@@ -89,38 +89,55 @@ namespace ArCalc {
 			return;
 		}
 
+		/* **** Order of checks ****
+		 * 1) Literals (and the Last keyword).
+		 * 2) Functions.
+		 * 3) Constants.
+		 * 4) Operators.
+		 * 
+		 * Due to conventions, constant and operator names will never overlap, 
+		 * and thus the order of thier checks will not make a difference.
+		*/
+
 		// Finished parsing, evaluating...
-		std::string literalName{GetString()};
-		if (MathOperator::IsValid(literalName)) {
-			EvalOperator();
-		} else if (m_FunMan.IsDefined(literalName)) {
-			EvalFunction();
-		} else {
-			// Strip the negative sign for lookup.
-			auto const bMinus{literalName.front() == '-'};
-			literalName = literalName.substr(bMinus ? 1U : 0U);
-			
-			if (auto const mul{bMinus ? -1.0 : 1.0}; m_LitMan.IsVisible(literalName)) {
-				if (bMinus) { // Minus sign turns it into an rvalue.
-					m_Values.PushRValue(*m_LitMan.Get(literalName) * -1.0);
-				} else {
-					m_Values.PushLValue(&m_LitMan.Get(literalName));
-				}
-			} else if (literalName == Keyword::ToString(KeywordType::Last)) {
-				// Is is always treated as an rvalue, the user can not pass it by reference.
-				m_Values.PushRValue(*m_LitMan.Get(literalName) * mul);
-			} else if (MathConstant::IsValid(literalName)) {
-				m_Values.PushRValue(MathConstant::ValueOf(literalName) * mul);
-			} else if (Keyword::IsValid(literalName)) {
-				// Only valid keyword in this context is _Last, which was already handled above.
-				throw SyntaxError{
-					"Found keyword [{}] in invalid context (in the middle of an expression)",
-					literalName
-				};
+		std::string identifier{GetString()};
+
+		// Strip the negative sign for lookup.
+		auto const bMinus{identifier.front() == '-'};
+		identifier = identifier.substr(bMinus ? 1U : 0U);
+
+		if (m_LitMan.IsVisible(identifier)) {
+			if (bMinus) { // Minus sign turns it into an rvalue.
+				m_Values.PushRValue(*m_LitMan.Get(identifier) * -1.0);
 			} else {
-				throw ExprEvalError{"Used of invalid name [{}]", literalName};
+				m_Values.PushLValue(&m_LitMan.Get(identifier));
 			}
-		}
+		} else if (identifier == Keyword::ToString(KeywordType::Last)) {
+			// Is is always treated as an rvalue, the user can not pass it by reference.
+			m_Values.PushRValue(*m_LitMan.Get(identifier) * (bMinus ? -1.0 : 1.0));
+		} else if (MathConstant::IsValid(identifier)) {
+			m_Values.PushRValue(MathConstant::ValueOf(identifier) * (bMinus ? -1.0 : 1.0));
+		} else if (m_FunMan.IsDefined(identifier)) { // Check function names first.
+			if (bMinus) {
+				throw ExprEvalError{"Found function name [{}] preceeded by a minus sign"};
+			} else {
+				EvalFunction();
+			}
+		} else if (MathOperator::IsValid(identifier)) { 
+			if (bMinus) {
+				throw ExprEvalError{"Found operator name [{}] preceeded by a minus sign"};
+			} else {
+				EvalOperator();
+			}
+		} else if (Keyword::IsValid(identifier)) {
+			// Only valid keyword in this context is _Last, which was already handled above.
+			throw SyntaxError{
+				"Found keyword [{}] in invalid context (in the middle of an expression)",
+				identifier
+			};
+		} else {
+			throw ExprEvalError{"Used of invalid name [{}]", identifier};
+		} 
 
 		ResetString();
 		ResetState(c);
@@ -222,7 +239,7 @@ namespace ArCalc {
 			// Must pop here ^^^ because, lhs might be an lvalue, and the expression result 
 			// must be an rvalue.
 			m_Values.PushRValue(MathOperator::EvalBinary(glyph, lhs, rhs));
-		} else {
+		} else if (MathOperator::IsUnary(glyph)) {
 			if (m_Values.Size() == 0) {
 				throw ExprEvalError{"Found unary operator [{}] with no operands", glyph};
 			}
@@ -230,6 +247,25 @@ namespace ArCalc {
 			auto const operand{*m_Values.Pop()};
 			// Must pop here ^^^, explained in the other branch.
 			m_Values.PushRValue(MathOperator::EvalUnary(glyph, operand));
+		} else if (MathOperator::IsVariadic(glyph)) {
+			if (m_Values.Size() == 0) {
+				throw ExprEvalError{"Found variadic operator [{}] with no operands", glyph};
+			}
+
+			auto const operands = [&] {
+				std::vector<double> res{};
+				res.reserve(m_Values.Size());
+				while (!m_Values.IsEmpty()) {
+					res.push_back(*m_Values.Pop());
+				}
+
+				return res;
+			}(/*)(*/);
+
+			// Must pop here ^^^, explained in the other branch.
+			m_Values.PushRValue(MathOperator::EvalVariadic(glyph, operands));
+		} else {
+			ARCALC_UNREACHABLE_CODE();
 		}
 	}
 
