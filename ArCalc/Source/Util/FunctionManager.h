@@ -106,7 +106,7 @@ namespace ArCalc {
 		void EndDefination();
 
 		bool IsDefined(std::string_view name) const;
-		FuncReturnType GetCurrentReturnType() const;
+		FuncReturnType CurrReturnType() const;
 		bool IsCurrFuncVariadic() const;
 		std::vector<ParamData> const& CurrParamData() const;
 		std::vector<ParamData>& CurrParamData();

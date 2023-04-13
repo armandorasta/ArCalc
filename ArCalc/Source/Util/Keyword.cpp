@@ -14,7 +14,8 @@ namespace ArCalc {
 		{"_Return",  KT::Return},
 		{"_Save",    KT::Save},
 		{"_Load",    KT::Load},
-		{"_Unscope", KT::Unscope}
+		{"_Unscope", KT::Unscope},
+		{"_Err",     KT::Err},
 	};
 
 	std::optional<Keyword::KT> Keyword::FromString(std::string_view glyph) {

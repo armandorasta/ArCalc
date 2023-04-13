@@ -663,14 +663,14 @@ PARSER_TEST(Different_return_types_and_branching) {
 	/* 1, 5 */ {
 		auto par{GenerateTestingInstance()};
 		par.ParseLine("_Func Sign n;");
-		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   _Return;"));
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:    _Return;"));
 		ASSERT_ANY_THROW(par.ParseLine("_Elif n 0 <: _Return -1;"));
 	}
 
 	/* 2, 6 */ {
 		auto par{GenerateTestingInstance()};
 		par.ParseLine("_Func Sign n;");
-		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   _Return -1;"));
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:    _Return -1;"));
 		ASSERT_ANY_THROW(par.ParseLine("_Elif n 0 <: _Return;"));
 	}
 
@@ -679,7 +679,7 @@ PARSER_TEST(Different_return_types_and_branching) {
 		par.ParseLine("_Func Sign n;");
 		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   _Return;"));
 		ASSERT_NO_THROW(par.ParseLine("_Elif n 0 <: _Return;"));
-		ASSERT_ANY_THROW(par.ParseLine("Else         _Return 0;"));
+		ASSERT_ANY_THROW(par.ParseLine("Else        _Return 0;"));
 	}
 	
 	/* 4 */ {
@@ -687,7 +687,7 @@ PARSER_TEST(Different_return_types_and_branching) {
 		par.ParseLine("_Func Sign n;");
 		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   _Return 1;"));
 		ASSERT_NO_THROW(par.ParseLine("_Elif n 0 <: _Return -1;"));
-		ASSERT_ANY_THROW(par.ParseLine("Else         _Return;"));
+		ASSERT_ANY_THROW(par.ParseLine("Else        _Return;"));
 	}
 
 	/* Mutliple elifs (same as 4) */ {
@@ -904,8 +904,8 @@ PARSER_TEST(Unscope_deleting_literals) {
 	par.ParseLine("_Func MyFunc param;");
 	par.ParseLine("_Set myLit param;");
 
-	// due to how the keyword works, deleting literals in function scopes in very error
-	// prone, and is not very useful in most case, so I am gonna disallow it for now.
+	// due to how the keyword works, deleting literals in function scopes is very error
+	// prone, and is not very useful in most cases, so I am gonna disallow it for now.
 	ASSERT_ANY_THROW(par.ParseLine("_Unscope myLit;"));
 }
 
@@ -924,4 +924,84 @@ PARSER_TEST(Unscope_deleting_and_renaming_functions) {
 	ASSERT_NO_THROW(par.ParseLine("_Unscope UselessFunc BestFuncEver;"));
 	ASSERT_FALSE(par.GetFunMan().IsDefined("UselessFunc"));
 	ASSERT_TRUE(par.GetFunMan().IsDefined("BestFuncEver"));
+
+	// The new name must be a valid idenitifier.
+	ASSERT_ANY_THROW(par.ParseLine("_Unscope BestFuncEver _If"));
+}
+
+PARSER_TEST(Err_keyword) {
+	auto par{GenerateTestingInstance()};
+
+	// No errors in global scope
+	ASSERT_THROW(par.ParseLine("_Err 'This is an error message'"), SyntaxError);
+
+	par.ParseLine("_Func ErrorOut unused;");
+	ASSERT_NO_THROW(par.ParseLine("_Err 'YAY!'"));
+	ASSERT_FALSE(par.IsParsingFunction());
+	ASSERT_THROW(par.ParseLine("5 ErrorOut;"), UserError);
+
+	try { 
+		par.ParseLine("5 ErrorOut;"); 
+		// Made sure it throws in the test before.
+	} catch (UserError const& err) {
+		ASSERT_EQ("YAY!", err.GetMessage());
+	}
+
+	/* Inside a branch */ {
+		par.ParseLine("_Func AssertPositive n;");
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 <: _Err 'Expected a positive number';"));
+		par.ParseLine("_Return;");
+
+		for (auto const i : view::iota(-10, 0)) {
+			ASSERT_THROW(par.ParseLine(std::format("{} AssertPositive", i)), UserError);
+		}
+		for (auto const i : view::iota(0, 11)) {
+			ASSERT_NO_THROW(par.ParseLine(std::format("{} AssertPositive", i)));
+		}
+	}
+
+	// No quotes allowed ever.
+	ASSERT_ANY_THROW(par.ParseLine("_Err 'error 'message right here'"));
+}
+
+PARSER_TEST(Multiple_returns_and_branching_with_error_statements_none) {
+	for (auto const i : view::iota(1U, 7U)) {
+		auto par{GenerateTestingInstance()};
+
+		using namespace std::string_literals;
+		par.ParseLine("_Func Shit n;");
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   "s 
+			+ ((i & 1) ? "_Return;" : "_Err 'yay!';"))) << i;
+		ASSERT_TRUE(par.IsParsingFunction()) << i;
+
+		ASSERT_NO_THROW(par.ParseLine("_Elif n 0 <: "s 
+			+ ((i & 2) ? "_Return;" : "_Err 'yay!';"))) << i;
+		ASSERT_TRUE(par.IsParsingFunction()) << i;
+
+		ASSERT_NO_THROW(par.ParseLine("_Else        "s 
+			+ ((i & 4) ? "_Return;" : "_Err 'yay!';"))) << i;
+		ASSERT_FALSE(par.IsParsingFunction()) << i;
+		ASSERT_EQ(FuncReturnType::None, par.GetFunMan().Get("Shit").ReturnType) << i;
+	}
+}
+
+PARSER_TEST(Multiple_returns_and_branching_with_error_statements_number) {
+	for (auto const i : view::iota(1U, 7U)) {
+		auto par{GenerateTestingInstance()};
+
+		using namespace std::string_literals;
+		par.ParseLine("_Func Shit n;");
+		ASSERT_NO_THROW(par.ParseLine("_If n 0 >:   "s 
+			+ ((i & 1) ? "_Return 1.0;" : "_Err 'yay!';"))) << i;
+		ASSERT_TRUE(par.IsParsingFunction()) << i;
+
+		ASSERT_NO_THROW(par.ParseLine("_Elif n 0 <: "s 
+			+ ((i & 2) ? "_Return 1.0;" : "_Err 'yay!';"))) << i;
+		ASSERT_TRUE(par.IsParsingFunction()) << i;
+
+		ASSERT_NO_THROW(par.ParseLine("_Else        "s 
+			+ ((i & 4) ? "_Return 1.0;" : "_Err 'yay!';"))) << i;
+		ASSERT_FALSE(par.IsParsingFunction()) << i;
+		ASSERT_EQ(FuncReturnType::Number, par.GetFunMan().Get("Shit").ReturnType) << i;
+	}
 }

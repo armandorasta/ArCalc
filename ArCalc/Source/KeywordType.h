@@ -83,5 +83,12 @@ namespace ArCalc {
 			--------------------------------------------------------------------
 		*/
 		Unscope,
+
+		/*
+			_Err "[error message]"
+
+			Exists a function with an error message.
+		*/
+		Err,
 	};
 }

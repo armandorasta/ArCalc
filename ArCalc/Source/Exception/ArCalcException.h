@@ -130,6 +130,14 @@ namespace ArCalc {
 			return "G";
 		}
 	};
+
+	class UserError : public ArCalcException {
+	public:
+		using ArCalcException::ArCalcException;
+		std::string GetType() const override {
+			return "U";
+		}
+	};
 }
 
 #ifdef NDEBUG

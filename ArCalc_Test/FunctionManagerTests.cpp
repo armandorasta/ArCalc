@@ -57,11 +57,11 @@ FUNMAN_TEST(Defining_a_function) {
 
 	ASSERT_NO_THROW(funMan.SetReturnType(FuncReturnType::Number));
 	ASSERT_TRUE(funMan.IsDefinationInProgress());
-	ASSERT_EQ(funMan.GetCurrentReturnType(), FuncReturnType::Number);
+	ASSERT_EQ(funMan.CurrReturnType(), FuncReturnType::Number);
 
 	ASSERT_NO_THROW(funMan.SetReturnType(FuncReturnType::None)); // Changing the return type must be allowed.
 	ASSERT_TRUE(funMan.IsDefinationInProgress());
-	ASSERT_EQ(funMan.GetCurrentReturnType(), FuncReturnType::None);
+	ASSERT_EQ(funMan.CurrReturnType(), FuncReturnType::None);
 
 	// The defination requires at least 1 parameter and 1 line of code.
 	ASSERT_NO_THROW(funMan.EndDefination());

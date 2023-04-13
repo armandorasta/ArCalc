@@ -132,8 +132,8 @@ namespace ArCalc {
 		m_CurrFuncData.ReturnType = retype;
 	}
 
-	FuncReturnType FunctionManager::GetCurrentReturnType() const {
-		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::GetCurrentReturnType outside defination");
+	FuncReturnType FunctionManager::CurrReturnType() const {
+		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::CurrReturnType outside defination");
 		return m_CurrFuncData.ReturnType;
 	}
 

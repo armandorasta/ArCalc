@@ -19,6 +19,9 @@ namespace ArCalc {
 	// There are 4 of these, but they should have been 6.
 	constexpr size_t SelectionBit {1U << 29}; 
 
+	// For formating the error message follows the err keyword
+	constexpr size_t FormatBit    {1U << 28};
+
 	enum class Parser::St : size_t {
 		// Rest.
 		Default = 0U,
@@ -44,6 +47,9 @@ namespace ArCalc {
 		IfSameLine     = ExecutionBit | SelectionBit | 4,
 		ElifSameLine   = ExecutionBit | SelectionBit | 5,
 		ElseSameLine   = ExecutionBit | SelectionBit | 6,
+
+		FoundLeftCurly  = FormatBit | 1,
+		FoundRightCurly = FormatBit | 2,
 	};
 
 	bool Parser::IsExecSt(St st) {
@@ -268,6 +274,7 @@ namespace ArCalc {
 		case KT::Save:    HandleSaveKeyword(); break;
 		case KT::Load:    HandleLoadKeyword(); break;
 		case KT::Unscope: HandleUnscopeKeyword(); break;
+		case KT::Err:     HandleErrKeyword(); break;
 		default:         ARCALC_UNREACHABLE_CODE();
 		}
 	}
@@ -314,9 +321,9 @@ namespace ArCalc {
 		if (state == St::Default || IsSelSt(state)) {
 			Print("{} = {}\n", litName, value);
 			if (MathConstant::IsValid(litName)) {
-				Print("Shadowing constant {} ({})", litName, MathConstant::ValueOf(litName));
+				Print("Shadowing constant [{} ({})]\n", litName, MathConstant::ValueOf(litName));
 			} else if (MathOperator::IsValid(litName)) {
-				Print("Shadowing {} operator {}", [&] {
+				Print("Shadowing {} operator [{}]", [&] {
 					if (MathOperator::IsUnary(litName)) {
 						return "unary";
 					} else if (MathOperator::IsBinary(litName)) {
@@ -477,26 +484,25 @@ namespace ArCalc {
 		case St::Default: 
 		case St::IfSameLine: 
 		case St::ElifSameLine: 
-		case St::ElseSameLine: {
+		case St::ElseSameLine:
 			if (!IsExecutingFunction()) {
-				throw SyntaxError{"Found {} in invalid context (global scope)", KeywordType::Return};
+				throw SyntaxError{"Found keyword {} in invalid context (global scope)", KeywordType::Return};
 			}
 
-			if (currLine.empty()) { m_ReturnValueRegister = {}; } 
-			else                  { m_ReturnValueRegister = Eval(currLine); }
+			m_ReturnValueRegister = currLine.empty() 
+				? decltype(m_ReturnValueRegister){} 
+				: Eval(currLine); 
 
 			break;
-		}
 		case St::Val_SubParser: 
 		case St::Val_IfSameLine:
 		case St::Val_ElifSameLine:
-		case St::Val_ElseSameLine: {
+		case St::Val_ElseSameLine: 
 			if (!currLine.empty()) {
 				Eval(currLine); // Just make sure no exception is thrown.
 			}
 			
 			break;
-		}
 		default: ARCALC_UNREACHABLE_CODE();
 		}
 	}
@@ -507,13 +513,22 @@ namespace ArCalc {
 		m_FunMan.AddCodeLine(std::string{m_CurrentLine} + (IsLineEndsWithSemiColon() ? ";" : ""));
 
 		if (auto& subParser{*m_pValSubParser}; subParser.m_bFuncMustExist) {
-			ARCALC_NOT_POSSIBLE(!subParser.m_ReturnTypeRegister);
-			m_FunMan.SetReturnType(*subParser.m_ReturnTypeRegister);
-			subParser.m_ReturnTypeRegister = {};
+			// ARCALC_NOT_POSSIBLE(!subParser.m_ReturnTypeRegister);
+			m_FunMan.SetReturnType(subParser.m_ReturnTypeRegister.value_or(FuncReturnType::None));
+			subParser.m_ReturnTypeRegister.reset();
+
+			// The following warnings will not be output when the return ends with a ; xd
+			if (auto const funcName{m_FunMan.CurrFunctionName()}; MathConstant::IsValid(funcName)) {
+				Print("This function shadows constant [{} ({})].\n", 
+					funcName, MathConstant::ValueOf(funcName));
+			} else if (MathOperator::IsValid(funcName)) {
+				Print("This function shadows operator [{}].\n", funcName);
+			}
 
 			m_FunMan.EndDefination();
 			SetState(St::Default);
 			m_pValSubParser.reset();
+
 		}
 	}
 
@@ -527,7 +542,7 @@ namespace ArCalc {
 		auto const keyword{*Keyword::FromString(Str::ChopFirstToken(m_CurrentLine))};
 		if (IsSelSt(state)) {
 			throw SyntaxError{
-				"Found selection keyword [{}] inside a selection statement.\n"
+				"Found selection keyword [{}] in invalid context (inside another selection statement).\n"
 				"Selection statements may not be nested inside one another",
 				keyword,
 			};
@@ -640,8 +655,9 @@ namespace ArCalc {
 		
 		// indicates that the current statement is a return statement.
 		auto const bReturn{m_CurrentLine.starts_with(Keyword::ToString(KeywordType::Return))};
+		auto const bErr{m_CurrentLine.starts_with(Keyword::ToString(KeywordType::Err))};
 		m_bAllOtherBranchesReturned = {
-			bReturn && (selKW == KeywordType::If || m_bAllOtherBranchesReturned)
+			(bReturn || bErr) && (selKW == KeywordType::If || m_bAllOtherBranchesReturned)
 		};
 
 		if (bExecute) {
@@ -750,11 +766,10 @@ namespace ArCalc {
 			case 'F':   m_FunMan.Deserialize(file); break;
 			case '\n':  break;
 			case '\0':  bQuit = true; break;
-			default: {
+			default:
 				throw ParseError{
 					"File deserialization failed; expected either C or F at the begining of the line"
 				};
-			}
 		}
 	}
 
@@ -762,55 +777,93 @@ namespace ArCalc {
 		auto const tokens{Str::SplitOnSpaces<std::string_view>(m_CurrentLine)};
 		KeywordDebugDoubleCheck(tokens.front(), KeywordType::Unscope);
 
+		auto const printUnshadowString = [this](auto name) {
+			if (MathConstant::IsValid(name)) {
+				Print("Revealing constant [{} ({})] once again.\n",
+					name, MathConstant::ValueOf(name));
+			} else if (MathOperator::IsValid(name)) {
+				Print("Revealing operator [{}] once again.\n", name);
+			}
+		};
+
 		switch (GetState()) { 
 		case St::Default: {
 			switch (tokens.size()) { // This is silly xd.
 			case 1:
 				// Do nothing.
 				break;
-			case 2: {
+			case 2:
+			{
 				auto const& name{tokens[1]};
+				ExpectIdentifier(name);
+
 				if (m_LitMan.IsVisible(name)) {
 					m_LitMan.Delete(name);
-					Print("Deleted literal: [{}].\n", name);
+					Print("Deleted literal: [{}].\n", name); 
+					printUnshadowString(name);
 				} else if (m_FunMan.IsDefined(name)) {
 					m_FunMan.Delete(name);
-					Print("Deleted function: [{}].\n", name);
-				} else throw SyntaxError{
-					"Tried to delete invalid name [{}]",
-					name,
-				};
+					Print("Deleted function: [{}]{}.\n", name); 
+					printUnshadowString(name);
+				} else if (MathConstant::IsValid(name)) {
+					throw SyntaxError{"Tried to delete constant [{}]", name};
+				} else if (MathOperator::IsValid(name)) {
+					throw SyntaxError{"Tried to delete operator [{}]", name};
+				} else {
+					throw SyntaxError{"Tried to delete unknown identifier [{}]", name};
+				}
 
 				break;
 			}
-			case 3: {
+			case 3:
+			{
 				auto const& oldName{tokens[1]};
+				ExpectIdentifier(oldName);
+
 				auto const& newName{tokens[2]};
-				if (m_LitMan.IsVisible(oldName)) { // Better error messages.
+				ExpectIdentifier(newName);
+
+				if (m_FunMan.IsDefined(oldName)) {
+					m_FunMan.Rename(oldName, newName);
+					Print("Function [{}] is now [{}].\n", oldName, newName); 
+					printUnshadowString(oldName);
+					if (MathConstant::IsValid(newName)) {
+						Print("But constant [{} ({})] is out.\n", 
+							newName, MathConstant::ValueOf(newName));
+					} else if (MathOperator::IsValid(newName)) {
+						Print("But operator [{}] is out.\n", newName);
+					} 
+				} else if (m_LitMan.IsVisible(oldName)) { // Better error messages.
 					throw SyntaxError{
 						"Tried to rename literal [{}], only functions may be renamed",
 						oldName,
 					};
-				} else if (m_FunMan.IsDefined(oldName)) {
-					m_FunMan.Rename(oldName, newName);
-					Print("Function [{}] is now [{}].\n", oldName, newName);
-				} else throw SyntaxError{ // Better error messages.
-					"Tried to rename invalid name [{}]",
-					oldName,
-				};
+				} else if (MathConstant::IsValid(oldName)) {
+					throw SyntaxError{
+						"Tried to rename constant [{}], only functions may be renamed", 
+						oldName
+					};
+				} else if (MathOperator::IsValid(oldName)) {
+					throw SyntaxError{
+						"Tried to rename operator [{}], only functions may be renamed", 
+						oldName
+					};
+				} else {
+					throw SyntaxError{"Tried to rename unknown identifier [{}]", oldName};
+				}
 
 				break;
 			}
 			default:
 				throw SyntaxError{
-					"Too many tokens passed to keyword [{}]",
+					"Too many tokens passed to keyword [{}]", 
 					Keyword::ToString(KeywordType::Unscope)
 				};
 			}
 
 			break;
 		}
-		case St::Val_SubParser: {
+		case St::Val_SubParser:
 			if (tokens.size() < 2) {
 				SetState(St::Val_UnscopeFunc);
 			} else {
@@ -819,26 +872,151 @@ namespace ArCalc {
 				// Better error messages.
 				if (m_LitMan.IsVisible(name)) { 
 					throw SyntaxError{
-						"Tried to delete literal [{}] in the scope of function [{}]",
-						name, m_FunMan.CurrFunctionName(),
+						"Tried to delete literal [{}] in the scope of another function",
+						name, 
 					};
 				} else if (m_FunMan.IsDefined(name)) {
 					// Deleting a function inside another function is just out of the question.
 					throw SyntaxError{
-						"Tried to delete function [{}] in the scope of function [{}]",
-						name, m_FunMan.CurrFunctionName(),
+						"Tried to delete function [{}] in the scope of another function",
+						name, 
+					};
+				} else if (MathConstant::IsValid(name)) {
+					throw SyntaxError{
+						"Tried to rename constant [{}] in the scope of another function", 
+						name, 
+					};
+				} else if (MathOperator::IsValid(name)) {
+					throw SyntaxError{
+						"Tried to rename operator [{}] in the scope of another function", 
+						name, 
 					};
 				} else throw SyntaxError{
-					"Tried to delete invalid name [{}] in the scope of function [{}]",
-					name, m_FunMan.CurrFunctionName(),
+					"Tried to delete unknown idenitifier [{}] in the scope of another function",
+					name, 
 				};
 			}
+
 			break;
-		}
 		default:
 			// I chose to handle conditionals in HandleConditionalBody instead.
 			ARCALC_UNREACHABLE_CODE();
 		}
+	}
+
+	void Parser::HandleErrKeyword() {
+		if (!IsExecutingFunction()) {
+			throw SyntaxError{
+				"Found keyword {} in invalid context (in global scope)",
+				KeywordType::Err,
+			};
+		}
+
+		auto const state{GetState()};
+		m_bFuncMustExist = (state == St::Val_SubParser);
+		KeywordDebugDoubleCheck(Str::ChopFirstToken<std::string_view>(m_CurrentLine),
+			KeywordType::Err);
+
+		auto const nNextChar = [this] {
+			for (size_t res{}; res < m_CurrentLine.size(); ++res) {
+				if (auto const ch{m_CurrentLine[res]}; !std::isspace(ch)) {
+					if (ch != '\'') {
+						throw SyntaxError{"Expected a single quote, but found [{}]", ch};
+					} else {
+						return res;
+					}
+				}
+			}
+
+			throw SyntaxError{"Expected a single quote, but found nothing"};
+		}(/*)(*/);
+
+		if (nNextChar == m_CurrentLine.size() - 1) {
+			throw SyntaxError{"Expected an error message"};
+		}
+
+		if (auto const qi{m_CurrentLine.find('\'', nNextChar + 1)}; qi == std::string::npos) {
+			throw SyntaxError{"Expected a single quote terminating the error message"};
+		} else if (qi != m_CurrentLine.size() - 1) {
+			throw SyntaxError{"Found a single quote in the middle of the error message"};
+		} else {
+			m_CurrentLine.remove_prefix(nNextChar + 1);
+			m_CurrentLine.remove_suffix(1);
+		}
+
+		if (!IsValSt(state)) {
+			throw UserError{m_CurrentLine};
+		}
+	}
+
+	std::string Parser::FormatErrorMessage(std::string_view message) {
+		St st{St::Default};
+		std::string formattedMessage{};
+		formattedMessage.reserve(message.size()); // Lower bound.
+		std::string exprAcc{};
+
+		for (auto const c : message) {
+			switch (st) {
+			case St::Default:
+				switch (c) {
+				case '{':
+					st = St::FoundLeftCurly;
+					break;
+				case '}':
+					st = St::FoundRightCurly;
+					break;
+				default:
+					formattedMessage.push_back(c);
+					break;
+				}
+
+				break;
+			case St::FoundLeftCurly:
+				switch (c) {
+				case '{':
+					formattedMessage.push_back(c);
+					st = St::Default;
+					break;
+				case '}':
+					if (exprAcc.empty()) {
+						throw SyntaxError{"Found an empty {{}} inside formatted message"};
+					} 
+
+					if (auto const res{Eval(exprAcc)}; !res) {
+						throw SyntaxError{"Found an expression returns none inside {{}}"};
+					} else {
+						// TODO: make this more flexible
+						formattedMessage.append(std::format("{:.2f}", *res));
+						exprAcc.clear();
+						st = St::Default;
+					}
+
+					break;
+				default:
+					exprAcc.push_back(c);
+					break;
+				}
+
+				break;
+			case St::FoundRightCurly: // Found a `}` before a `{`
+				if (c == '}') {
+					formattedMessage.push_back(c);
+					st = St::Default;
+				} else {
+					throw SyntaxError{"Found `}` with no matching `{`"};
+				}
+
+				break;
+			default:
+				ARCALC_UNREACHABLE_CODE();
+			}
+		}
+
+		if (st == St::FoundLeftCurly) {
+			throw SyntaxError{"Expected a `}` terminating formatted message"};
+		}
+
+		return formattedMessage;
 	}
 
 	void Parser::HandleNormalExpression() {
@@ -866,16 +1044,13 @@ namespace ArCalc {
 	}
 
 #ifdef NDEBUG
-	void Parser::KeywordDebugDoubleCheck([[maybe_unused]] std::string_view glyph, 
-		[[maybe_unused]] KeywordType what) 
-#else // ^^^^ Release, vvvv Debug.
-	void Parser::KeywordDebugDoubleCheck(std::string_view glyph, KeywordType what) 
-#endif
-	{
-#ifndef NDEBUG
-		return ExpectKeyword(glyph, what);
-#endif // ^^^^ Debug mode only.
+	void Parser::KeywordDebugDoubleCheck(std::string_view, KeywordType) {
 	}
+#else // ^^^^ Release, vvvv Debug.
+	void Parser::KeywordDebugDoubleCheck(std::string_view glyph, KeywordType what) {
+		return ExpectKeyword(glyph, what);
+	}
+#endif
 
 	void Parser::ExpectIdentifier(std::string_view what) {
 		if (std::isdigit(what[0])) {
