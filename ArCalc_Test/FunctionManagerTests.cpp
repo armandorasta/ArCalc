@@ -3,6 +3,7 @@
 #include <Util/FunctionManager.h>
 #include <Util/IO.h>
 #include <Exception/ArCalcException.h>
+#include "TestingHelperMacros.h"
 
 #define FUNMAN_TEST(_testName) TEST_F(FunctionManagerTests, _testName)
 
@@ -33,25 +34,24 @@ FUNMAN_TEST(Defining_a_function) {
 	ASSERT_NO_THROW(funMan.BeginDefination(sc_FuncName, sc_LineNumber));
 	ASSERT_TRUE(funMan.IsDefinationInProgress());
 
-	for (constexpr auto ParamPerfix{"param"}; auto i : view::iota(0U, sc_ParamCount)) {
+	for (constexpr auto ParamPrefix{"param"}; auto i : view::iota(0U, sc_ParamCount)) {
 		if (i % 2) {
-			ASSERT_NO_THROW(funMan.AddParam(std::format("{}{}", ParamPerfix, i)));
+			ASSERT_NO_THROW(funMan.AddParam(std::format("{}{}", ParamPrefix, i))) 
+				<< "i == " << i;
 		} else {
-			ASSERT_NO_THROW(funMan.AddRefParam(std::format("{}{}", ParamPerfix, i)));
+			ASSERT_NO_THROW(funMan.AddRefParam(std::format("{}{}", ParamPrefix, i))) 
+				<< "i == " << i;
 		}
 		ASSERT_TRUE(funMan.IsDefinationInProgress());
 
 		// Doublicate parameter name, must throw before perfoming action!
-		ASSERT_ANY_THROW(funMan.AddParam(std::format("{}{}", ParamPerfix, i))); 
+		ASSERT_ANY_THROW(funMan.AddParam(std::format("{}{}", ParamPrefix, i))); 
 	}
 
 	// ASSERT_FALSE(funMan.IsCurrFuncVariadic());
 	// ASSERT_NO_THROW(funMan.AddVariadicParam(std::format("param{}", sc_ParamCount)));
 	// ASSERT_TRUE(funMan.IsCurrFuncVariadic());
 
-	// Empty functions don't make any sense here and are not allowed.
-	// EndDefination is expected to throw before performing any action.
-	ASSERT_ANY_THROW(funMan.EndDefination());
 	ASSERT_NO_THROW(funMan.AddCodeLine("a 2 + 3 *"));
 	ASSERT_TRUE(funMan.IsDefinationInProgress());
 

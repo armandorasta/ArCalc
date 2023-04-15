@@ -19,6 +19,8 @@
 */
 
 namespace ArCalc {
+	class Parser;
+
 	enum class FuncReturnType : size_t {
 		None = 0,
 		Number,
@@ -102,6 +104,7 @@ namespace ArCalc {
 
 		void AddCodeLine(std::string_view codeLine);
 		void RemoveLastLine();
+		void RemoveLastLineIfExists();
 		void SetReturnType(FuncReturnType retype);
 		void EndDefination();
 
@@ -130,7 +133,8 @@ namespace ArCalc {
 
 		void CopyMapFrom(FunctionManager const& what);
 
-		void Reset();
+		void RedoEval(Parser& par);
+		void SubReset();
 		void ResetCurrFunc();
 
 	private:

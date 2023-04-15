@@ -320,7 +320,7 @@ namespace ArCalc {
 	}
 
 	void MathOperator::AssertGreaterThan(double n, double min, std::string_view funcName) {
-		if (n <= min) {
+		if (n < min) {
 			throw MathError{
 				"Tried to take `{}` of {}, while `{}` is only defined for values greater than [{}]",
 				funcName, n, funcName, min,
@@ -329,7 +329,7 @@ namespace ArCalc {
 	}
 
 	void MathOperator::AssertLessThan(double n, double max, std::string_view funcName) {
-		if (n >= max) {
+		if (n > max) {
 			throw MathError{
 				"Tried to take `{}` of {}, while `{}` is only defined for values less than [{}]",
 				funcName, n, funcName, max,

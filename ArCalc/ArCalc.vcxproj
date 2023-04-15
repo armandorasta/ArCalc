@@ -157,6 +157,7 @@
     <ClCompile Include="Source\ValueStack.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\ArWin.h" />
     <ClInclude Include="Source\Util\NumberParser.h" />
     <ClInclude Include="Source\Util\LiteralManager.h" />
     <ClInclude Include="Source\App.h" />

@@ -82,7 +82,7 @@ namespace ArCalc {
 
 		void SetMap(LiteralMap const& toWhat);
 
-		void Reset();
+		void SubReset();
 
 	private:
 		bool m_bSuppressOutput{};

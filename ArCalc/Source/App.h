@@ -11,6 +11,8 @@
  * Operators and built in functions => snake_case.
  */
 
+using HANDLE = void*;
+
 namespace ArCalc {
 	class App {
 	public:
@@ -21,5 +23,6 @@ namespace ArCalc {
 
 	private:
 		std::unique_ptr<Parser> m_pParser{};
+		HANDLE hConsole{};
 	};
 }

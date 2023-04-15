@@ -78,7 +78,7 @@ namespace ArCalc {
 		m_LitMap = toWhat;
 	}
 
-	void LiteralManager::Reset() {
+	void LiteralManager::SubReset() {
 		m_LitMap.clear();
 	}
 }

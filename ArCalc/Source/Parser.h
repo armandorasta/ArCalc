@@ -6,16 +6,7 @@
 #include "Util/LiteralManager.h"
 
 /* Minimum amount of features to start working on the console interface:
-	* Add the _Err keyword {
-		* Lets you exit a function with an error message for invalid input.
-		* Create a new exception type for these type of errors.
-	}
-	* Change the _Unscope keyword {
-		* It just undoes the last line by default, and only when supplied a `*` 
-		  just after, it will cancel the current scope.
-		* Or maybe when supplied the keyword that initiates the scope instead? can't decide.
-	}
-	* Add a variation to the _Func keyword {
+	* Add a variation to the _Func keyword (This will probably never happen) {
 		* It can define lambdas inline, which can be passed to functions.
 
 		// Same as std::acumulate
@@ -116,13 +107,49 @@ namespace ArCalc {
 		// 15
 	*/
 
+	namespace Secret {
+		/* Constants for the statement machine enum */
+
+		// Used during validation of function bodies.
+		inline constexpr size_t StValBit{1U << 31};
+
+		// Used during NOT validation of function bodies
+		inline constexpr size_t StExecBit{1U << 30};
+		inline constexpr size_t StSelBit {1U << 29}; // Used for selection statements. 
+
+		// For formating the error message follows the err keyword
+		inline constexpr size_t FormatBit{1U << 28};
+
+		// Used to unset all the flags above, so the top 48 bits are reserved.
+		inline constexpr size_t ResetMask{(1U << 16) - 1};
+	}
+
 	class Parser {
 	private:
 		enum class St : size_t;
-		static bool IsExecSt(St st);
-		static bool IsValSt(St st);
-		static bool IsSelSt(St st);
+		
+		static constexpr bool IsExecSt(St st) {
+			return static_cast<std::underlying_type_t<St>>(st) & Secret::StExecBit;
+		}
 
+		static constexpr bool IsValSt(St st) {
+			return static_cast<std::underlying_type_t<St>>(st) & Secret::StValBit;
+		}
+
+		static constexpr bool IsSelSt(St st) {
+			return static_cast<std::underlying_type_t<St>>(st) & Secret::StSelBit;
+		}
+
+		friend constexpr St operator&(St lhs, size_t rhs) {
+			using UndT = std::underlying_type_t<St>;
+			return static_cast<St>(static_cast<UndT>(lhs) & rhs);
+		}
+
+		friend constexpr St operator|(St lhs, size_t rhs) {
+			using UndT = std::underlying_type_t<St>;
+			return static_cast<St>(static_cast<UndT>(lhs) | rhs);
+		}
+		
 	private:
 		struct ConditionAndStatement {
 			std::string_view Condition;
@@ -183,17 +210,28 @@ namespace ArCalc {
 		void SetOStream(std::ostream& toWhat);
 		std::ostream& GetOStream();
 
-		constexpr auto IsExecutingFunction() const 
-			{ return m_bInFunction; }
+		constexpr auto IsExecutingFunction() const { 
+			return m_bInFunction; 
+		}
+
 		bool IsParsingFunction() const;
 
-		bool IsParsingSelectionStatement() const;
+		constexpr size_t GetLineNumber() const { 
+			return m_LineNumber; 
+		}
 		
-		constexpr size_t GetLineNumber()         const { return m_LineNumber; }
-		constexpr void ResetLineNumber()               { m_LineNumber = 0; }
-		constexpr bool IsLineEndsWithSemiColon() const { return m_bSemiColon; }
+		constexpr void ResetLineNumber() { 
+			m_LineNumber = 0; 
+		}
 
-		constexpr bool IsCurrentStatementReturning() const { return m_bJustHitReturn; }
+		constexpr bool IsLineEndsWithSemiColon() const { 
+			return m_bSemiColon; 
+		}
+
+		constexpr bool IsCurrentStatementReturning() const { 
+			return m_bJustHitReturn; 
+		}
+
 		std::optional<double> GetReturnValue(FuncReturnType retype);
 
 		LiteralManager const& GetLitMan()  const { return m_LitMan; }
@@ -202,12 +240,18 @@ namespace ArCalc {
 		void ExceptionReset();
 
 		void ToggleOutput();
-		constexpr bool IsOutputEnabled() const { return !m_bSuppressOutput; }
+		constexpr bool IsOutputEnabled() const { 
+			return !m_bSuppressOutput; 
+		}
+
+		void SubReset();
 
 	private:
 		void HandleFirstToken();
 		std::optional<double> Eval(std::string_view exprString);
-		constexpr void IncrementLineNumber(size_t inc = 1U) { m_LineNumber += inc; }
+		constexpr void IncrementLineNumber(size_t inc = 1U) { 
+			m_LineNumber += inc; 
+		}
 		
 		void HandleSetKeyword();
 		void HandleNormalExpression();
@@ -233,10 +277,16 @@ namespace ArCalc {
 
 		void ExpectKeyword(std::string_view glyph, KeywordType what);
 		void KeywordDebugDoubleCheck(std::string_view glyph, KeywordType what);
-		void ExpectIdentifier(std::string_view what);
+		static void ExpectIdentifier(std::string_view what);
+		static bool IsValidIdentifier(std::string_view what);
 
-		constexpr St GetState()              const { return m_CurrState; }
-		constexpr void SetState(St newState)       { m_CurrState = newState; }
+		constexpr St GetState() const { 
+			return m_CurrState; 
+		}
+		
+		constexpr void SetState(St newState) { 
+			m_CurrState = newState; 
+		}
 
 		template <class... FormatArgs>
 		void Print(std::string_view fmtString, FormatArgs&&... fmtArgs) {
@@ -248,8 +298,6 @@ namespace ArCalc {
 			}
 		}
 
-		void Reset();
-		
 	private:
 		FunctionManager m_FunMan;
 		LiteralManager m_LitMan;

@@ -1,21 +1,14 @@
 #pragma once
 
 namespace ArCalc {
-	enum class KeywordType {
-		/*
-			_Set [Name] [Make]
-
-			Assigns or initializes a variable with name[Name] and value[Make]
-		*/
-		Set,
-
+	enum class KeywordType : size_t {
 		/*
 			_List [Prefix, opt]
 
 			Lists all variabls with the specified prefix or all variables if
 			no prefix is specified
 		*/
-		List,
+		List = 0,
 
 		/*
 			_Func [Name] ([Params..., opt]) [Body];
@@ -90,5 +83,22 @@ namespace ArCalc {
 			Exists a function with an error message.
 		*/
 		Err,
+
+		/*
+			[_Sig or _Pi] [variable name] [min] [max (inclusive)]
+				[function]
+
+			_Sum: passes values of [min, max] to the function and adds them up.
+			_Mul: same as _Sum, except it multiplies instead of adding.
+		*/
+		Sum,
+		Mul,
+
+		/*
+			_Set [Name] [Make]
+
+			Assigns or initializes a variable with name[Name] and value [Make]
+		*/
+		Set,
 	};
 }

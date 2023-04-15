@@ -4,11 +4,30 @@
 #include "Util/MathOperator.h"
 #include "Util/IO.h"
 
+#include "ArWin.h"
+
 namespace ArCalc {
-	App::App() : m_pParser{std::make_unique<Parser>(std::cout)} {
+	App::App() : 
+		m_pParser{std::make_unique<Parser>(std::cout)}, 
+		hConsole{GetStdHandle(STD_OUTPUT_HANDLE)}
+	{
+		constexpr auto error = [](auto const message) {
+			std::cerr << message;
+			std::terminate();
+		};
+
+		if (!hConsole) {
+			error("GetStdHandle");
+		}
+
+		auto window{GetConsoleWindow()};
+		if (!SetWindowPos(window, nullptr, 500, 50, 500, 750, NULL)) {
+			error("SetWindowPos");
+		}
 	}
 
 	void App::Run() {
+
 		for (;;) {
 			constexpr auto Tab{"...."};
 			auto const indentation = [&, this] {
@@ -17,10 +36,6 @@ namespace ArCalc {
 				if (m_pParser->IsParsingFunction()) { 
 					res.append(Tab);
 				}
-				// Indent furthur for selection statements.
-				if (m_pParser->IsParsingSelectionStatement()) { 
-					res.append(Tab);
-				} 
 
 				return res;
 			}(/*)(*/);

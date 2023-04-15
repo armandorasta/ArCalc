@@ -26,7 +26,6 @@ namespace ArCalc {
 
 	public:
 		NumberParserResult Parse(char c);
-
 		void Reset();
 
 	private:
@@ -37,7 +36,7 @@ namespace ArCalc {
 		}
 		
 		constexpr void SetState(St toWhat) { 
-			m_CurrState = toWhat; 
+			m_CurrState = toWhat;
 		}
 
 		void AddChar(char c);

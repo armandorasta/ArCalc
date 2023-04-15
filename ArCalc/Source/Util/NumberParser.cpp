@@ -40,11 +40,6 @@ namespace ArCalc {
 		m_StringAcc.push_back(c);
 	}
 
-	void NumberParser::Reset() {
-		ResetAcc();
-		SetState(St::ParsingBegin);
-	}
-
 	NumberParserResult NumberParser::Parse(char c) {
 		switch (auto const state{GetState()}; state) {
 		case St::ParsingBegin: 
@@ -76,6 +71,11 @@ namespace ArCalc {
 		};
 
 		ARCALC_UNREACHABLE_CODE(); // Each switch hand must exit at the end.
+	}
+
+	void NumberParser::Reset() {
+		ResetAcc();
+		SetState(St::ParsingBegin);
 	}
 
 	double NumberParser::ValidateAndFixParsedNumber() {

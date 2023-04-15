@@ -33,16 +33,12 @@ namespace ArCalc {
 		DoIteration(' '); // Cut any unfinished tokens.
 
 		if (m_Values.Size() > 1) { 
-			throw ExprEvalError{
-				"Incomplete eval: {{ {}}}", [this] {
-					for (auto stackStr = std::string{};;) {
-						stackStr = std::to_string(*m_Values.Pop()) + ' ' + stackStr; 
-						if (m_Values.IsEmpty()) {
-							return stackStr;
-						}
-					}
-				}(/*)(*/)
-			};
+			for (auto stackStr = std::string{};;) {
+				stackStr = std::to_string(*m_Values.Pop()) + ' ' + stackStr; 
+				if (m_Values.IsEmpty()) {
+					throw ExprEvalError{"Incomplete eval: {{ {}}}", stackStr};
+				}
+			}
 		} else {
 			auto const res = m_Values.IsEmpty() ? std::optional<double>{} : *m_Values.Pop();
 			Reset();
@@ -112,7 +108,7 @@ namespace ArCalc {
 			} else {
 				m_Values.PushLValue(&m_LitMan.Get(identifier));
 			}
-		} else if (identifier == Keyword::ToString(KeywordType::Last)) {
+		} else if (identifier == Keyword::ToStringView(KeywordType::Last)) {
 			// Is is always treated as an rvalue, the user can not pass it by reference.
 			m_Values.PushRValue(*m_LitMan.Get(identifier) * (bMinus ? -1.0 : 1.0));
 		} else if (m_FunMan.IsDefined(identifier)) {

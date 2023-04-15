@@ -116,8 +116,6 @@ namespace ArCalc {
 
 	void FunctionManager::AddCodeLine(std::string_view codeLine) {
 		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::AddCodeLine outside defination");
-		ARCALC_DA(!m_CurrFuncData.Params.empty(), "Adding a function takes no arguments");
-
 		m_CurrFuncData.CodeLines.push_back(std::string{codeLine});
 	}
 
@@ -125,6 +123,12 @@ namespace ArCalc {
 		ARCALC_DA(!m_CurrFuncData.CodeLines.empty(), 
 			"FunctionManager::RemoveLastLine with no last line to remove");
 		m_CurrFuncData.CodeLines.pop_back();
+	}
+
+	void FunctionManager::RemoveLastLineIfExists() {
+		if (!m_CurrFuncData.CodeLines.empty()) {
+			m_CurrFuncData.CodeLines.pop_back();
+		}
 	}
 
 	void FunctionManager::SetReturnType(FuncReturnType retype) {
@@ -158,8 +162,11 @@ namespace ArCalc {
 	}
 
 	void FunctionManager::ResetCurrFunc() {
-		// Remove it from the map.
-		m_FuncMap.erase(m_CurrFuncName);
+		// Can't just check the parameter count, because parameterless functions
+		// are now allowed.
+		if (m_FuncMap.contains(m_CurrFuncName)) {
+			m_FuncMap.erase(m_CurrFuncName);
+		}
 		m_CurrFuncName = {};
 		m_CurrFuncData = {};
 	}
@@ -176,7 +183,14 @@ namespace ArCalc {
 		m_FuncMap = what.m_FuncMap;
 	}
 
-	void FunctionManager::Reset() {
+	void FunctionManager::RedoEval(Parser& par) {
+		par.SubReset();
+		for (auto const& line : m_CurrFuncData.CodeLines) {
+			par.ParseLine(line);
+		}
+	}
+
+	void FunctionManager::SubReset() {
 		ResetCurrFunc();
 		m_FuncMap.clear(); 
 	}
@@ -185,17 +199,23 @@ namespace ArCalc {
 		bool m_bReference) 
 	{
 		ARCALC_DA(IsDefinationInProgress(), "FunctionManager::AddParamImpl outside defination");
-		ARCALC_DA(!m_CurrFuncData.IsVariadic, "Adding parameter after making function variadic");
+		// ARCALC_DA(!m_CurrFuncData.IsVariadic, "Adding parameter after making function variadic");
 		ARCALC_DA(m_CurrFuncData.CodeLines.empty(), 
 			"Tried to add a parameter after adding a code line");
 
 		// No doublicates please.
 		auto const paramNameOwned = std::string{paramName};
+		if (m_CurrFuncName == paramName) {
+			throw SyntaxError{
+				"Found a parameter name identical to the name of the of it's own function"
+			};
+		}
+
 		if (auto const it{range::find(m_CurrFuncData.Params, paramNameOwned, &ParamData::GetName)};
-			it != m_CurrFuncData.Params.end())
+			it != m_CurrFuncData.Params.end()) 
 		{
 			throw SyntaxError{
-				"Error: Adding function with doublicate parameter name [{}]", paramName
+				"Found doublicate parameter name [{}]", paramName
 			};
 		}
 
@@ -203,7 +223,7 @@ namespace ArCalc {
 			? ParamData::MakeByRef(paramName)
 			: ParamData::MakeByValue(paramName, bParameterPack)};
 		m_CurrFuncData.Params.emplace_back(param);
-		m_CurrFuncData.IsVariadic = bParameterPack;
+		// m_CurrFuncData.IsVariadic = bParameterPack;
 	}
 
 	FuncData const& FunctionManager::Get(std::string_view funcName) const {

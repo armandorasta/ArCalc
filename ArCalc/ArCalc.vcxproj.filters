@@ -119,6 +119,9 @@
     <ClInclude Include="Source\Util\NumberParser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\ArWin.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Program.txt" />
